@@ -1,0 +1,21 @@
+package com.tino.payroll.lite.dto;
+
+import lombok.Builder;
+import lombok.Data;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+@Data
+@Builder
+public class EmployeeResponse {
+    private Long id;
+    private String employeeNumber;
+    private String firstName;
+    private String lastName;
+    private String email;
+    private String jobTitle;
+    private BigDecimal basicSalary;
+    private LocalDate hireDate;
+
+}
