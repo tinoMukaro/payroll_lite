@@ -4,6 +4,7 @@ package com.tino.payroll.lite.service;
 import com.tino.payroll.lite.dto.CreateEmployeeRequest;
 import com.tino.payroll.lite.dto.EmployeeResponse;
 import com.tino.payroll.lite.entity.Employee;
+import com.tino.payroll.lite.exception.EmployeeNotFoundException;
 import com.tino.payroll.lite.repository.EmployeeRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,14 @@ public class EmployeeService {
 
 //create
     public EmployeeResponse createEmployee(CreateEmployeeRequest request){
+        // Validate email uniqueness
+        if (employeeRepo.existsByEmail(request.getEmail())) {
+            throw new IllegalArgumentException("Email already exists");
+        }
+        // Validate employee number uniqueness
+        if (employeeRepo.existsByEmployeeNumber(request.getEmployeeNumber())) {
+            throw new IllegalArgumentException("Employee number already exists");
+        }
         Employee employee = Employee.builder()
                 .employeeNumber(request.getEmployeeNumber())
                 .firstName(request.getFirstName())
@@ -47,7 +56,7 @@ public class EmployeeService {
 
         Employee employee = employeeRepo.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException(
+                        new EmployeeNotFoundException(
                                 "Employee not found with ID: " + id
                         )
                 );
@@ -63,7 +72,7 @@ public class EmployeeService {
 
         Employee employee = employeeRepo.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException(
+                        new EmployeeNotFoundException(
                                 "Employee not found with ID: " + id
                         )
                 );
@@ -85,7 +94,7 @@ public class EmployeeService {
 
         Employee employee = employeeRepo.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException(
+                        new EmployeeNotFoundException(
                                 "Employee not found with ID: " + id
                         )
                 );

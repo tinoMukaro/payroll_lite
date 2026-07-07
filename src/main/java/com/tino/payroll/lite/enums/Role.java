@@ -1,4 +1,4 @@
-package com.tino.payroll.lite.entity;
+package com.tino.payroll.lite.enums;
 
 public enum Role {
     ADMIN,
