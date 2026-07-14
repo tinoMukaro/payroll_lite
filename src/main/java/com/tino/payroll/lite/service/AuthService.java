@@ -1,6 +1,7 @@
 package com.tino.payroll.lite.service;
 
 
+import com.tino.payroll.lite.dto.AuthResponse;
 import com.tino.payroll.lite.dto.LoginRequest;
 import com.tino.payroll.lite.dto.RegisterUserRequest;
 import com.tino.payroll.lite.dto.UserResponse;
@@ -17,6 +18,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
     //register
     public UserResponse register(RegisterUserRequest request){
@@ -50,24 +52,32 @@ public class AuthService {
                 .build();
     }
 //login
-    public UserResponse login(LoginRequest request){
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Invalid email or password")
-                );
-        boolean passwordMatches = passwordEncoder.matches(
-                request.getPassword(),
-                user.getPassword()
-        );
-        if (!passwordMatches) {
-            throw new IllegalArgumentException("Invalid email or password");
-        }
+public AuthResponse login(LoginRequest request) {
 
-        if (!user.isEnabled()) {
-            throw new IllegalArgumentException("Account is disabled");
-        }
+    User user = userRepository.findByEmail(request.getEmail())
+            .orElseThrow(() ->
+                    new IllegalArgumentException("Invalid email or password")
+            );
 
-        return mapToResponse(user);
+    boolean passwordMatches = passwordEncoder.matches(
+            request.getPassword(),
+            user.getPassword()
+    );
+
+    if (!passwordMatches) {
+        throw new IllegalArgumentException("Invalid email or password");
     }
+
+    if (!user.isEnabled()) {
+        throw new IllegalArgumentException("Account is disabled");
+    }
+
+    String token = jwtService.generateToken(user);
+
+    return AuthResponse.builder()
+            .token(token)
+            .user(mapToResponse(user))
+            .build();
+}
 
 }

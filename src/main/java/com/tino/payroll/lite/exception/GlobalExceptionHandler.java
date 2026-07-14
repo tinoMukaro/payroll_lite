@@ -36,11 +36,17 @@ public class GlobalExceptionHandler {
             IllegalArgumentException exception,
             HttpServletRequest request
     ) {
+        exception.printStackTrace();
+
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST.value())
                 .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
-                .message(exception.getMessage())
+                .message(
+                        exception.getMessage() != null
+                                ? exception.getMessage()
+                                : "Bad request"
+                )
                 .path(request.getRequestURI())
                 .build();
 

@@ -1,6 +1,7 @@
 package com.tino.payroll.lite.controller;
 
 
+import com.tino.payroll.lite.dto.AuthResponse;
 import com.tino.payroll.lite.dto.LoginRequest;
 import com.tino.payroll.lite.dto.RegisterUserRequest;
 import com.tino.payroll.lite.dto.UserResponse;
@@ -34,12 +35,12 @@ public class AuthController {
 
     //login
     @PostMapping("/login")
-    public ResponseEntity<UserResponse> login(
+    public ResponseEntity<AuthResponse> login(
             @Valid @RequestBody LoginRequest request
-            ){
-        UserResponse user = authService.login(request);
-
-        return ResponseEntity.ok(user);
+    ) {
+        AuthResponse response = authService.login(request);
+        return ResponseEntity.ok(response);
     }
+
 
 }
