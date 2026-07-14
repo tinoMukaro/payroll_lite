@@ -1,6 +1,7 @@
 package com.tino.payroll.lite.controller;
 
 
+import com.tino.payroll.lite.dto.LoginRequest;
 import com.tino.payroll.lite.dto.RegisterUserRequest;
 import com.tino.payroll.lite.dto.UserResponse;
 import com.tino.payroll.lite.service.AuthService;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
-
+//register
     @PostMapping("/register")
     public ResponseEntity<UserResponse> register(
             @Valid @RequestBody RegisterUserRequest request
@@ -29,6 +30,16 @@ public class AuthController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(user);
+    }
+
+    //login
+    @PostMapping("/login")
+    public ResponseEntity<UserResponse> login(
+            @Valid @RequestBody LoginRequest request
+            ){
+        UserResponse user = authService.login(request);
+
+        return ResponseEntity.ok(user);
     }
 
 }
