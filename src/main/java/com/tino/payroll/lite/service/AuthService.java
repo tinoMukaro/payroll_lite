@@ -9,6 +9,7 @@ import com.tino.payroll.lite.entity.User;
 import com.tino.payroll.lite.enums.Role;
 import com.tino.payroll.lite.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -79,5 +80,11 @@ public AuthResponse login(LoginRequest request) {
             .user(mapToResponse(user))
             .build();
 }
+
+//get me
+    public UserResponse getCurrentUser(Authentication authentication){
+        User user = (User) authentication.getPrincipal();
+        return mapToResponse(user);
+    }
 
 }
