@@ -32,7 +32,7 @@ public class AuthService {
                 .lastName(request.getLastName())
                 .email(request.getEmail())
                 .password(hashedPassword)
-                .role(Role.HR)
+                .role(Role.EMPLOYEE)
                 .enabled(true)
                 .build();
         User savedUser = userRepository.save(user);
