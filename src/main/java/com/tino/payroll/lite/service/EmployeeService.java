@@ -17,7 +17,9 @@ public class EmployeeService {
 
     private final EmployeeRepo employeeRepo;
 
-//create
+    // -----------------------------------------------------
+    // CREATE EMPLOYEE
+    // ----------------------------------------------------
     public EmployeeResponse createEmployee(CreateEmployeeRequest request){
         // Validate email uniqueness
         if (employeeRepo.existsByEmail(request.getEmail())) {
@@ -43,7 +45,9 @@ public class EmployeeService {
     }
 
 
-//get all employees
+    // -----------------------------------------------------
+    // GET ALL EMPLOYEES
+    // ----------------------------------------------------
     public List<EmployeeResponse> getAllEmployees() {
 
         return employeeRepo.findAll()
@@ -51,7 +55,9 @@ public class EmployeeService {
                 .map(this::mapToResponse)
                 .toList();
     }
-    //get employee by id
+    // -----------------------------------------------------
+    // GET EMPLOYEE BY ID
+    // ----------------------------------------------------
     public EmployeeResponse getEmployeeById(Long id) {
 
         Employee employee = employeeRepo.findById(id)
@@ -64,7 +70,9 @@ public class EmployeeService {
         return mapToResponse(employee);
     }
 
-    // update employee
+    // -----------------------------------------------------
+    // UPDATE EMPLOYEE
+    // ----------------------------------------------------
     public EmployeeResponse updateEmployee(
             Long id,
             CreateEmployeeRequest request
@@ -89,7 +97,9 @@ public class EmployeeService {
 
         return mapToResponse(updatedEmployee);
     }
-    // delete an employee
+    // -----------------------------------------------------
+    // DELETE EMPLOYEE
+    // ----------------------------------------------------
     public void deleteEmployee(Long id) {
 
         Employee employee = employeeRepo.findById(id)

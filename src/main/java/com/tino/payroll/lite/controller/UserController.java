@@ -18,11 +18,18 @@ public class UserController {
 
     private final UserService userService;
 
+
+    // -----------------------------------------------------
+    // GET ALL USERS
+    // ----------------------------------------------------
     @GetMapping
     public ResponseEntity<List<UserResponse>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
+    // -----------------------------------------------------
+    // UPDATE USER ROLE
+    // ----------------------------------------------------
     @PatchMapping("/{id}/role")
     public ResponseEntity<UserResponse> updateUserRole(
             @PathVariable Long id,

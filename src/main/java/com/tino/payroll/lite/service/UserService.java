@@ -15,6 +15,10 @@ public class UserService {
 
     private final UserRepository userRepository;
 
+
+    // -----------------------------------------------------
+    // GET ALL USERS
+    // ----------------------------------------------------
     public List<UserResponse> getAllUsers(){
         return userRepository.findAll()
                 .stream()
@@ -22,6 +26,9 @@ public class UserService {
                 .toList();
     }
 
+    // -----------------------------------------------------
+    // UPDATE USER ROLE
+    // ----------------------------------------------------
     public UserResponse updateUserRole(Long id, UpdateUserRoleRequest request){
         User user = findUserById(id);
 
@@ -32,6 +39,9 @@ public class UserService {
         return mapToResponse(updatedUser);
     }
 
+    // -----------------------------------------------------
+    // FIND USER BY ID
+    // ----------------------------------------------------
     private User findUserById(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() ->

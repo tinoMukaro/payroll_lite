@@ -21,7 +21,9 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-    //register
+    // -----------------------------------------------------
+    // REGISTER USER
+    // ----------------------------------------------------
     public UserResponse register(RegisterUserRequest request){
         if (userRepository.existsByEmail(request.getEmail())){
             throw new IllegalArgumentException("Email is already registered");
@@ -52,7 +54,9 @@ public class AuthService {
                 .enabled(user.isEnabled())
                 .build();
     }
-//login
+    // -----------------------------------------------------
+    // USER LOGIN
+    // ----------------------------------------------------
 public AuthResponse login(LoginRequest request) {
 
     User user = userRepository.findByEmail(request.getEmail())
@@ -81,7 +85,9 @@ public AuthResponse login(LoginRequest request) {
             .build();
 }
 
-//get me
+    // -----------------------------------------------------
+    // GET LOGGED IN USER
+    // ----------------------------------------------------
     public UserResponse getCurrentUser(Authentication authentication){
         User user = (User) authentication.getPrincipal();
         return mapToResponse(user);
