@@ -1,5 +1,6 @@
 package com.tino.payroll.lite.entity;
 
+import com.tino.payroll.lite.enums.EmployeeStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -40,5 +41,9 @@ public class Employee {
 
     private LocalDate hireDate;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(255) default 'ACTIVE'")
+    @Builder.Default
+    private EmployeeStatus status = EmployeeStatus.ACTIVE;
 
 }

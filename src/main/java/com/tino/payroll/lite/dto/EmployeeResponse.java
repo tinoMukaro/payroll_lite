@@ -1,5 +1,6 @@
 package com.tino.payroll.lite.dto;
 
+import com.tino.payroll.lite.enums.EmployeeStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -17,5 +18,6 @@ public class EmployeeResponse {
     private String jobTitle;
     private BigDecimal basicSalary;
     private LocalDate hireDate;
+    private EmployeeStatus status;
 
 }

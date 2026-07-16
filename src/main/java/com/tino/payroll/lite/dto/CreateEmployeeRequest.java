@@ -1,6 +1,7 @@
 package com.tino.payroll.lite.dto;
 
 
+import com.tino.payroll.lite.enums.EmployeeStatus;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
@@ -35,5 +36,6 @@ public class CreateEmployeeRequest {
     @PastOrPresent(message = "Hire date cannot be in the future")
     private LocalDate hireDate;
 
+    private EmployeeStatus status;
 
 }

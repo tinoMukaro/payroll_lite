@@ -4,6 +4,7 @@ package com.tino.payroll.lite.service;
 import com.tino.payroll.lite.dto.CreateEmployeeRequest;
 import com.tino.payroll.lite.dto.EmployeeResponse;
 import com.tino.payroll.lite.entity.Employee;
+import com.tino.payroll.lite.enums.EmployeeStatus;
 import com.tino.payroll.lite.exception.EmployeeNotFoundException;
 import com.tino.payroll.lite.repository.EmployeeRepo;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class EmployeeService {
                 .jobTitle(request.getJobTitle())
                 .basicSalary(request.getBasicSalary())
                 .hireDate(request.getHireDate())
+                .status(request.getStatus() == null ? EmployeeStatus.ACTIVE : request.getStatus())
                 .build();
 
         Employee savedEmployee = employeeRepo.save(employee);
@@ -92,6 +94,9 @@ public class EmployeeService {
         employee.setJobTitle(request.getJobTitle());
         employee.setBasicSalary(request.getBasicSalary());
         employee.setHireDate(request.getHireDate());
+        if (request.getStatus() != null) {
+            employee.setStatus(request.getStatus());
+        }
 
         Employee updatedEmployee = employeeRepo.save(employee);
 
@@ -124,6 +129,7 @@ public class EmployeeService {
                 .jobTitle(employee.getJobTitle())
                 .basicSalary(employee.getBasicSalary())
                 .hireDate(employee.getHireDate())
+                .status(employee.getStatus())
                 .build();
     }
 }
