@@ -35,7 +35,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/me").authenticated()
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers("/api/employees/**").hasAnyRole("ADMIN", "HR")
                         .requestMatchers("/api/payroll-runs/**").hasAnyRole("ADMIN", "HR")
                         .requestMatchers("/api/users/**").hasRole("ADMIN")
@@ -54,5 +54,15 @@ public class SecurityConfig {
     ) throws Exception {
         return configuration.getAuthenticationManager();
     }
+
+    private static final String[] PUBLIC_ENDPOINTS = {
+            "/api/auth/**",
+
+            // Swagger / OpenAPI
+            "/swagger-ui/**",
+            "/swagger-ui.html",
+            "/v3/api-docs/**",
+            "/v3/api-docs.yaml"
+    };
 
 }

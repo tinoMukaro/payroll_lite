@@ -6,6 +6,7 @@ import com.tino.payroll.lite.dto.LoginRequest;
 import com.tino.payroll.lite.dto.RegisterUserRequest;
 import com.tino.payroll.lite.dto.UserResponse;
 import com.tino.payroll.lite.service.AuthService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
+@Tag(name = "Auth", description = "Auth management APIs")
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {

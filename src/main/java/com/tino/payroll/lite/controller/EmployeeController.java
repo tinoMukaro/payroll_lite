@@ -5,6 +5,7 @@ import com.tino.payroll.lite.dto.CreateEmployeeRequest;
 import com.tino.payroll.lite.dto.EmployeeResponse;
 import com.tino.payroll.lite.entity.Employee;
 import com.tino.payroll.lite.service.EmployeeService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
+@Tag(name = "Employee", description = "Employee management APIs")
 @RequestMapping("/api/employees")
 @RequiredArgsConstructor
 public class EmployeeController {

@@ -4,6 +4,7 @@ import com.tino.payroll.lite.dto.CreatePayrollRunRequest;
 import com.tino.payroll.lite.dto.PayrollRunResponse;
 import com.tino.payroll.lite.dto.PayslipResponse;
 import com.tino.payroll.lite.service.PayrollService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
+@Tag(name = "Payroll-runs", description = "Payroll management APIs")
 @RequestMapping("/api/payroll-runs")
 @RequiredArgsConstructor
 public class PayrollController {
