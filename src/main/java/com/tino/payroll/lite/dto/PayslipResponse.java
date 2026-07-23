@@ -14,6 +14,8 @@ public class PayslipResponse {
     private String employeeNumber;
     private String employeeName;
     private Long payrollRunId;
+    private Integer month;
+    private Integer year;
     private BigDecimal basicSalary;
     private BigDecimal grossSalary;
     private BigDecimal nssaDeduction;

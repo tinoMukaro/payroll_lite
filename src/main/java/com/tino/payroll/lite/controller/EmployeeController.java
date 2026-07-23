@@ -1,9 +1,8 @@
 package com.tino.payroll.lite.controller;
 
-
 import com.tino.payroll.lite.dto.CreateEmployeeRequest;
 import com.tino.payroll.lite.dto.EmployeeResponse;
-import com.tino.payroll.lite.entity.Employee;
+import com.tino.payroll.lite.dto.UpdateEmployeeRequest;
 import com.tino.payroll.lite.service.EmployeeService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -22,69 +21,34 @@ public class EmployeeController {
 
     private final EmployeeService employeeService;
 
-
-    // -----------------------------------------------------
-    // CREATE EMPLOYEE
-    // ----------------------------------------------------
     @PostMapping
     public ResponseEntity<EmployeeResponse> createEmployee(
             @Valid @RequestBody CreateEmployeeRequest request
     ) {
-        EmployeeResponse employee =
-                employeeService.createEmployee(request);
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(employee);
+        return ResponseEntity.status(HttpStatus.CREATED).body(employeeService.createEmployee(request));
     }
-    // -----------------------------------------------------
-    // GET ALL EMPLOYEES
-    // ----------------------------------------------------
+
     @GetMapping
     public ResponseEntity<List<EmployeeResponse>> getAllEmployees() {
-
-        List<EmployeeResponse> employees =
-                employeeService.getAllEmployees();
-
-        return ResponseEntity.ok(employees);
+        return ResponseEntity.ok(employeeService.getAllEmployees());
     }
-    // -----------------------------------------------------
-    // GET EMPLOYEE BY ID
-    // ----------------------------------------------------
+
     @GetMapping("/{id}")
-    public ResponseEntity<EmployeeResponse> getEmployeeById(
-            @PathVariable Long id
-    ) {
-        EmployeeResponse employee =
-                employeeService.getEmployeeById(id);
-
-        return ResponseEntity.ok(employee);
+    public ResponseEntity<EmployeeResponse> getEmployeeById(@PathVariable Long id) {
+        return ResponseEntity.ok(employeeService.getEmployeeById(id));
     }
-    // -----------------------------------------------------
-    // UPDATE EMPLOYEE
-    // ----------------------------------------------------
+
     @PutMapping("/{id}")
     public ResponseEntity<EmployeeResponse> updateEmployee(
             @PathVariable Long id,
-            @Valid @RequestBody CreateEmployeeRequest request
+            @Valid @RequestBody UpdateEmployeeRequest request
     ) {
-        EmployeeResponse employee =
-                employeeService.updateEmployee(id, request);
-
-        return ResponseEntity.ok(employee);
+        return ResponseEntity.ok(employeeService.updateEmployee(id, request));
     }
 
-    // -----------------------------------------------------
-    // DELETE EMPLOYEE
-    // ----------------------------------------------------
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteEmployee(
-            @PathVariable Long id
-    ) {
+    public ResponseEntity<Void> deleteEmployee(@PathVariable Long id) {
         employeeService.deleteEmployee(id);
-
         return ResponseEntity.noContent().build();
     }
-
-
 }

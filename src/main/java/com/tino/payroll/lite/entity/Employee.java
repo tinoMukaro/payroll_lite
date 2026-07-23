@@ -32,7 +32,6 @@ public class Employee {
     @Column(unique = true, nullable = false)
     private String email;
 
-
     private String phoneNumber;
     private String jobTitle;
 
@@ -46,4 +45,7 @@ public class Employee {
     @Builder.Default
     private EmployeeStatus status = EmployeeStatus.ACTIVE;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", unique = true)
+    private User user;
 }

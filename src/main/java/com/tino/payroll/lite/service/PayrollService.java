@@ -87,6 +87,12 @@ public class PayrollService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<PayslipResponse> getPayslipsForUser(Long userId) {
+        return payslipRepository.findForUser(userId).stream()
+                .map(this::mapPayslip)
+                .toList();
+    }
     private PayrollRun findPayrollRun(Long id) {
         return payrollRunRepository.findById(id)
                 .orElseThrow(() -> new PayrollRunNotFoundException("Payroll run not found with ID: " + id));
@@ -129,6 +135,8 @@ public class PayrollService {
                 .employeeNumber(employee.getEmployeeNumber())
                 .employeeName(employee.getFirstName() + " " + employee.getLastName())
                 .payrollRunId(payslip.getPayrollRun().getId())
+                .month(payslip.getPayrollRun().getMonth())
+                .year(payslip.getPayrollRun().getYear())
                 .basicSalary(payslip.getBasicSalary())
                 .grossSalary(payslip.getGrossSalary())
                 .nssaDeduction(payslip.getNssaDeduction())

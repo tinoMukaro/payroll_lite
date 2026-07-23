@@ -127,6 +127,33 @@ class PayrollServiceTest {
                 () -> payrollService.getPayrollRun(99L));
     }
 
+    @Test
+    void employeePayslipsAreLoadedOnlyThroughTheAuthenticatedUserId() {
+        Employee employee = Employee.builder()
+                .id(10L)
+                .employeeNumber("EMP-000010")
+                .firstName("Ada")
+                .lastName("Moyo")
+                .build();
+        PayrollRun payrollRun = draftPayrollRun();
+        Payslip payslip = new Payslip();
+        payslip.setId(20L);
+        payslip.setEmployee(employee);
+        payslip.setPayrollRun(payrollRun);
+        payslip.setGrossSalary(new BigDecimal("1500.00"));
+        payslip.setTotalDeductions(BigDecimal.ZERO);
+        payslip.setNetSalary(new BigDecimal("1500.00"));
+
+        when(payslipRepository.findForUser(7L)).thenReturn(List.of(payslip));
+
+        var responses = payrollService.getPayslipsForUser(7L);
+
+        assertEquals(1, responses.size());
+        assertEquals(7, responses.getFirst().getMonth());
+        assertEquals(2026, responses.getFirst().getYear());
+        assertEquals("EMP-000010", responses.getFirst().getEmployeeNumber());
+        verify(payslipRepository).findForUser(7L);
+    }
     private CreatePayrollRunRequest request(Integer month, Integer year) {
         CreatePayrollRunRequest request = new CreatePayrollRunRequest();
         request.setMonth(month);

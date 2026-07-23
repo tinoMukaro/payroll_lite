@@ -19,5 +19,6 @@ public class EmployeeResponse {
     private BigDecimal basicSalary;
     private LocalDate hireDate;
     private EmployeeStatus status;
-
+    private Long userId;
+    private boolean accountLinked;
 }
