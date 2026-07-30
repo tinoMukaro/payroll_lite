@@ -42,14 +42,23 @@ public class Payslip {
     private BigDecimal basicSalary;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "varchar(10) default 'USD'")
+    @Column(nullable = false)
     private CurrencyCode currency;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal grossSalary;
 
-    @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal nssaDeduction;
+    @Column(name = "pensionable_earnings", nullable = false, precision = 12, scale = 2)
+    private BigDecimal pensionableEarnings;
+
+    @Column(name = "nssa_deduction", nullable = false, precision = 12, scale = 2)
+    private BigDecimal employeeNssaContribution;
+
+    @Column(name = "employer_nssa_contribution", nullable = false, precision = 12, scale = 2)
+    private BigDecimal employerNssaContribution;
+
+    @Column(name = "nssa_rule_version", nullable = false, length = 100)
+    private String nssaRuleVersion;
     
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal payeDeduction;
@@ -65,6 +74,10 @@ public class Payslip {
 
     @PrePersist
     void onCreate() {
+        if (pensionableEarnings == null) pensionableEarnings = BigDecimal.ZERO;
+        if (employeeNssaContribution == null) employeeNssaContribution = BigDecimal.ZERO;
+        if (employerNssaContribution == null) employerNssaContribution = BigDecimal.ZERO;
+        if (nssaRuleVersion == null) nssaRuleVersion = "NOT_APPLIED";
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }

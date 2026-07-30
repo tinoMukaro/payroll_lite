@@ -45,6 +45,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/payslips/me").authenticated()
                         .requestMatchers("/api/employees/**").hasAnyRole("ADMIN", "HR")
                         .requestMatchers("/api/payroll-runs/**").hasAnyRole("ADMIN", "HR")
+                        .requestMatchers("/api/nssa-rules/**").hasAnyRole("ADMIN", "HR")
                         .requestMatchers("/api/users/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )

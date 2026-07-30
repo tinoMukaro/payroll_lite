@@ -21,7 +21,10 @@ public class PayslipResponse {
     private CurrencyCode currency;
     private BigDecimal basicSalary;
     private BigDecimal grossSalary;
-    private BigDecimal nssaDeduction;
+    private BigDecimal pensionableEarnings;
+    private BigDecimal employeeNssaContribution;
+    private BigDecimal employerNssaContribution;
+    private String nssaRuleVersion;
     private BigDecimal payeDeduction;
     private BigDecimal totalDeductions;
     private BigDecimal netSalary;

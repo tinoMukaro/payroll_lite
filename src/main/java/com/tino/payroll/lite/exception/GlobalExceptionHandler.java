@@ -13,6 +13,12 @@ import java.time.LocalDateTime;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(NssaRuleNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNssaRuleNotFound(
+            NssaRuleNotFoundException exception, HttpServletRequest request
+    ) {
+        return buildError(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
     @ExceptionHandler(PayrollRunNotFoundException.class)
     public ResponseEntity<ErrorResponse> handlePayrollRunNotFound(
             PayrollRunNotFoundException exception, HttpServletRequest request
@@ -34,6 +40,12 @@ public class GlobalExceptionHandler {
         return buildError(HttpStatus.CONFLICT, exception.getMessage(), request);
     }
 
+    @ExceptionHandler(PayrollConfigurationException.class)
+    public ResponseEntity<ErrorResponse> handlePayrollConfiguration(
+            PayrollConfigurationException exception, HttpServletRequest request
+    ) {
+        return buildError(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage(), request);
+    }
     @ExceptionHandler(EmployeeNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleEmployeeNotFound(
             EmployeeNotFoundException exception, HttpServletRequest request

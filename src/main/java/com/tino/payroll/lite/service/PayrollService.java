@@ -14,12 +14,17 @@ import com.tino.payroll.lite.exception.PayrollRunNotFoundException;
 import com.tino.payroll.lite.repository.EmployeeRepo;
 import com.tino.payroll.lite.repository.PayrollRunRepository;
 import com.tino.payroll.lite.repository.PayslipRepository;
+import com.tino.payroll.lite.service.calculation.NssaCalculation;
+import com.tino.payroll.lite.service.calculation.NssaCalculator;
+import com.tino.payroll.lite.service.calculation.NssaParameters;
+import com.tino.payroll.lite.service.calculation.NssaRuleResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 
 @Service
@@ -29,6 +34,8 @@ public class PayrollService {
     private final PayrollRunRepository payrollRunRepository;
     private final PayslipRepository payslipRepository;
     private final EmployeeRepo employeeRepo;
+    private final NssaRuleResolver nssaRuleResolver;
+    private final NssaCalculator nssaCalculator;
 
     @Transactional
     public PayrollRunResponse createPayrollRun(CreatePayrollRunRequest request) {
@@ -69,9 +76,23 @@ public class PayrollService {
             );
         }
 
-        List<Payslip> payslips = employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, payrollRun.getCurrency()).stream()
-                .map(employee -> createPayslip(employee, payrollRun))
-                .toList();
+        List<Employee> eligibleEmployees = employeeRepo.findAllByStatusAndSalaryCurrency(
+                EmployeeStatus.ACTIVE,
+                payrollRun.getCurrency()
+        );
+
+        List<Payslip> payslips;
+        if (eligibleEmployees.isEmpty()) {
+            payslips = List.of();
+        } else {
+            NssaParameters nssaParameters = nssaRuleResolver.resolve(
+                    payrollRun.getCurrency(),
+                    YearMonth.of(payrollRun.getYear(), payrollRun.getMonth()).atEndOfMonth()
+            );
+            payslips = eligibleEmployees.stream()
+                    .map(employee -> createPayslip(employee, payrollRun, nssaParameters))
+                    .toList();
+        }
 
         payslipRepository.saveAll(payslips);
         payrollRun.setStatus(PayrollStatus.PROCESSED);
@@ -99,11 +120,18 @@ public class PayrollService {
                 .orElseThrow(() -> new PayrollRunNotFoundException("Payroll run not found with ID: " + id));
     }
 
-    private Payslip createPayslip(Employee employee, PayrollRun payrollRun) {
+    private Payslip createPayslip(
+            Employee employee,
+            PayrollRun payrollRun,
+            NssaParameters nssaParameters
+    ) {
         BigDecimal basicSalarySnapshot = employee.getBasicSalary();
-        BigDecimal nssaDeduction = BigDecimal.ZERO;
+        NssaCalculation nssaCalculation = nssaCalculator.calculate(
+                basicSalarySnapshot,
+                nssaParameters
+        );
         BigDecimal payeDeduction = BigDecimal.ZERO;
-        BigDecimal totalDeductions = nssaDeduction.add(payeDeduction);
+        BigDecimal totalDeductions = nssaCalculation.employeeContribution().add(payeDeduction);
 
         Payslip payslip = new Payslip();
         payslip.setEmployee(employee);
@@ -111,13 +139,15 @@ public class PayrollService {
         payslip.setBasicSalary(basicSalarySnapshot);
         payslip.setCurrency(payrollRun.getCurrency());
         payslip.setGrossSalary(basicSalarySnapshot);
-        payslip.setNssaDeduction(nssaDeduction);
+        payslip.setPensionableEarnings(nssaCalculation.pensionableEarnings());
+        payslip.setEmployeeNssaContribution(nssaCalculation.employeeContribution());
+        payslip.setEmployerNssaContribution(nssaCalculation.employerContribution());
+        payslip.setNssaRuleVersion(nssaCalculation.ruleVersion());
         payslip.setPayeDeduction(payeDeduction);
         payslip.setTotalDeductions(totalDeductions);
         payslip.setNetSalary(basicSalarySnapshot.subtract(totalDeductions));
         return payslip;
     }
-
     private PayrollRunResponse mapPayrollRun(PayrollRun payrollRun) {
         return PayrollRunResponse.builder()
                 .id(payrollRun.getId())
@@ -143,7 +173,10 @@ public class PayrollService {
                 .currency(payslip.getCurrency())
                 .basicSalary(payslip.getBasicSalary())
                 .grossSalary(payslip.getGrossSalary())
-                .nssaDeduction(payslip.getNssaDeduction())
+                .pensionableEarnings(payslip.getPensionableEarnings())
+                .employeeNssaContribution(payslip.getEmployeeNssaContribution())
+                .employerNssaContribution(payslip.getEmployerNssaContribution())
+                .nssaRuleVersion(payslip.getNssaRuleVersion())
                 .payeDeduction(payslip.getPayeDeduction())
                 .totalDeductions(payslip.getTotalDeductions())
                 .netSalary(payslip.getNetSalary())

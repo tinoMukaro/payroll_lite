@@ -9,10 +9,14 @@ import com.tino.payroll.lite.enums.EmployeeStatus;
 import com.tino.payroll.lite.enums.PayrollStatus;
 import com.tino.payroll.lite.exception.DuplicatePayrollRunException;
 import com.tino.payroll.lite.exception.InvalidPayrollStateException;
+import com.tino.payroll.lite.exception.PayrollConfigurationException;
 import com.tino.payroll.lite.exception.PayrollRunNotFoundException;
 import com.tino.payroll.lite.repository.EmployeeRepo;
 import com.tino.payroll.lite.repository.PayrollRunRepository;
 import com.tino.payroll.lite.repository.PayslipRepository;
+import com.tino.payroll.lite.service.calculation.NssaCalculator;
+import com.tino.payroll.lite.service.calculation.NssaParameters;
+import com.tino.payroll.lite.service.calculation.NssaRuleResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,12 +41,20 @@ class PayrollServiceTest {
     private PayslipRepository payslipRepository;
     @Mock
     private EmployeeRepo employeeRepo;
+    @Mock
+    private NssaRuleResolver nssaRuleResolver;
+
+    private NssaCalculator nssaCalculator;
 
     private PayrollService payrollService;
 
     @BeforeEach
     void setUp() {
-        payrollService = new PayrollService(payrollRunRepository, payslipRepository, employeeRepo);
+        nssaCalculator = new NssaCalculator();
+        payrollService = new PayrollService(
+                payrollRunRepository, payslipRepository, employeeRepo,
+                nssaRuleResolver, nssaCalculator
+        );
     }
 
     @Test
@@ -71,6 +84,8 @@ class PayrollServiceTest {
 
         when(payrollRunRepository.findById(1L)).thenReturn(Optional.of(payrollRun));
         when(employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD)).thenReturn(List.of(employee));
+        when(nssaRuleResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenReturn(nssaParameters());
         when(payrollRunRepository.save(any(PayrollRun.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -84,8 +99,12 @@ class PayrollServiceTest {
         assertEquals(new BigDecimal("1500.00"), payslip.getBasicSalary());
         assertEquals(CurrencyCode.USD, payslip.getCurrency());
         assertEquals(new BigDecimal("1500.00"), payslip.getGrossSalary());
-        assertEquals(0, BigDecimal.ZERO.compareTo(payslip.getTotalDeductions()));
-        assertEquals(new BigDecimal("1500.00"), payslip.getNetSalary());
+        assertEquals(new BigDecimal("1000.00"), payslip.getPensionableEarnings());
+        assertEquals(new BigDecimal("45.00"), payslip.getEmployeeNssaContribution());
+        assertEquals(new BigDecimal("45.00"), payslip.getEmployerNssaContribution());
+        assertEquals("TEST-NSSA-USD-2026-07", payslip.getNssaRuleVersion());
+        assertEquals(new BigDecimal("45.00"), payslip.getTotalDeductions());
+        assertEquals(new BigDecimal("1455.00"), payslip.getNetSalary());
         assertSame(employee, payslip.getEmployee());
         assertSame(payrollRun, payslip.getPayrollRun());
         assertEquals(PayrollStatus.PROCESSED, payrollRun.getStatus());
@@ -108,6 +127,29 @@ class PayrollServiceTest {
 
         verify(employeeRepo).findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD);
         verify(payslipRepository).saveAll(List.of());
+        verifyNoInteractions(nssaRuleResolver);
+    }
+
+    @Test
+    void missingNssaConfigurationStopsPayrollBeforeAnythingIsSaved() {
+        PayrollRun payrollRun = draftPayrollRun();
+        Employee employee = Employee.builder()
+                .id(10L)
+                .basicSalary(new BigDecimal("1500.00"))
+                .status(EmployeeStatus.ACTIVE)
+                .build();
+        when(payrollRunRepository.findById(1L)).thenReturn(Optional.of(payrollRun));
+        when(employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD))
+                .thenReturn(List.of(employee));
+        when(nssaRuleResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenThrow(new PayrollConfigurationException("No NSSA rule configured"));
+
+        assertThrows(PayrollConfigurationException.class,
+                () -> payrollService.processPayrollRun(1L));
+
+        verifyNoInteractions(payslipRepository);
+        verify(payrollRunRepository, never()).save(any(PayrollRun.class));
+        assertEquals(PayrollStatus.DRAFT, payrollRun.getStatus());
     }
 
     @Test
@@ -119,7 +161,7 @@ class PayrollServiceTest {
         assertThrows(InvalidPayrollStateException.class,
                 () -> payrollService.processPayrollRun(1L));
 
-        verifyNoInteractions(employeeRepo, payslipRepository);
+        verifyNoInteractions(employeeRepo, payslipRepository, nssaRuleResolver);
     }
 
     @Test
@@ -156,6 +198,14 @@ class PayrollServiceTest {
         assertEquals(2026, responses.getFirst().getYear());
         assertEquals("EMP-000010", responses.getFirst().getEmployeeNumber());
         verify(payslipRepository).findForUser(7L);
+    }
+    private NssaParameters nssaParameters() {
+        return new NssaParameters(
+                new BigDecimal("0.045"),
+                new BigDecimal("0.045"),
+                new BigDecimal("1000.00"),
+                "TEST-NSSA-USD-2026-07"
+        );
     }
     private CreatePayrollRunRequest request(Integer month, Integer year) {
         CreatePayrollRunRequest request = new CreatePayrollRunRequest();

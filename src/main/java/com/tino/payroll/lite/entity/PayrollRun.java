@@ -38,7 +38,7 @@ public class PayrollRun {
     private Integer year;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "varchar(10) default 'USD'")
+    @Column(nullable = false)
     private CurrencyCode currency;
 
     @Enumerated(EnumType.STRING)

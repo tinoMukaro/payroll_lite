@@ -40,14 +40,14 @@ public class Employee {
     private BigDecimal basicSalary;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "salary_currency", nullable = false, columnDefinition = "varchar(10) default 'USD'")
+    @Column(name = "salary_currency", nullable = false)
     @Builder.Default
     private CurrencyCode salaryCurrency = CurrencyCode.USD;
 
     private LocalDate hireDate;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "varchar(255) default 'ACTIVE'")
+    @Column(nullable = false)
     @Builder.Default
     private EmployeeStatus status = EmployeeStatus.ACTIVE;
 
