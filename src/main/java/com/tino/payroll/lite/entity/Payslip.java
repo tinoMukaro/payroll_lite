@@ -1,5 +1,7 @@
 package com.tino.payroll.lite.entity;
 
+import com.tino.payroll.lite.enums.CurrencyCode;
+
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -38,6 +40,10 @@ public class Payslip {
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal basicSalary;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(10) default 'USD'")
+    private CurrencyCode currency;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal grossSalary;

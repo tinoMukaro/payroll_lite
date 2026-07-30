@@ -4,6 +4,7 @@ import com.tino.payroll.lite.dto.CreateEmployeeRequest;
 import com.tino.payroll.lite.dto.EmployeeResponse;
 import com.tino.payroll.lite.entity.Employee;
 import com.tino.payroll.lite.entity.User;
+import com.tino.payroll.lite.enums.CurrencyCode;
 import com.tino.payroll.lite.enums.Role;
 import com.tino.payroll.lite.repository.EmployeeRepo;
 import com.tino.payroll.lite.repository.UserRepository;
@@ -73,6 +74,7 @@ class EmployeeServiceTest {
         request.setEmail(email);
         request.setJobTitle("Developer");
         request.setBasicSalary(new BigDecimal("1000.00"));
+        request.setSalaryCurrency(CurrencyCode.USD);
         request.setHireDate(LocalDate.of(2026, 1, 1));
         return request;
     }

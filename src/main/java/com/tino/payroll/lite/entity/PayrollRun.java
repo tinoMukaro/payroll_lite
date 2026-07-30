@@ -1,6 +1,7 @@
 package com.tino.payroll.lite.entity;
 
 
+import com.tino.payroll.lite.enums.CurrencyCode;
 import com.tino.payroll.lite.enums.PayrollStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -21,7 +22,7 @@ import java.util.List;
         name = "payroll_runs",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_payroll_run_period",
-                columnNames = {"month", "year"}
+                columnNames = {"month", "year", "currency"}
         )
 )
 public class PayrollRun {
@@ -35,6 +36,10 @@ public class PayrollRun {
 
     @Column(name = "year", nullable = false)
     private Integer year;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(10) default 'USD'")
+    private CurrencyCode currency;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)

@@ -32,15 +32,16 @@ public class PayrollService {
 
     @Transactional
     public PayrollRunResponse createPayrollRun(CreatePayrollRunRequest request) {
-        if (payrollRunRepository.existsByMonthAndYear(request.getMonth(), request.getYear())) {
+        if (payrollRunRepository.existsByMonthAndYearAndCurrency(request.getMonth(), request.getYear(), request.getCurrency())) {
             throw new DuplicatePayrollRunException(
-                    "A payroll run already exists for month " + request.getMonth() + " and year " + request.getYear()
+                    "A payroll run already exists for month " + request.getMonth() + " and year " + request.getYear() + " in " + request.getCurrency()
             );
         }
 
         PayrollRun payrollRun = new PayrollRun();
         payrollRun.setMonth(request.getMonth());
         payrollRun.setYear(request.getYear());
+        payrollRun.setCurrency(request.getCurrency());
         payrollRun.setStatus(PayrollStatus.DRAFT);
 
         return mapPayrollRun(payrollRunRepository.save(payrollRun));
@@ -68,7 +69,7 @@ public class PayrollService {
             );
         }
 
-        List<Payslip> payslips = employeeRepo.findAllByStatus(EmployeeStatus.ACTIVE).stream()
+        List<Payslip> payslips = employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, payrollRun.getCurrency()).stream()
                 .map(employee -> createPayslip(employee, payrollRun))
                 .toList();
 
@@ -108,6 +109,7 @@ public class PayrollService {
         payslip.setEmployee(employee);
         payslip.setPayrollRun(payrollRun);
         payslip.setBasicSalary(basicSalarySnapshot);
+        payslip.setCurrency(payrollRun.getCurrency());
         payslip.setGrossSalary(basicSalarySnapshot);
         payslip.setNssaDeduction(nssaDeduction);
         payslip.setPayeDeduction(payeDeduction);
@@ -121,6 +123,7 @@ public class PayrollService {
                 .id(payrollRun.getId())
                 .month(payrollRun.getMonth())
                 .year(payrollRun.getYear())
+                .currency(payrollRun.getCurrency())
                 .status(payrollRun.getStatus())
                 .createdAt(payrollRun.getCreatedAt())
                 .processedAt(payrollRun.getProcessedAt())
@@ -137,6 +140,7 @@ public class PayrollService {
                 .payrollRunId(payslip.getPayrollRun().getId())
                 .month(payslip.getPayrollRun().getMonth())
                 .year(payslip.getPayrollRun().getYear())
+                .currency(payslip.getCurrency())
                 .basicSalary(payslip.getBasicSalary())
                 .grossSalary(payslip.getGrossSalary())
                 .nssaDeduction(payslip.getNssaDeduction())

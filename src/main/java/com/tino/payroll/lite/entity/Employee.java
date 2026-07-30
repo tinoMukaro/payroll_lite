@@ -1,5 +1,6 @@
 package com.tino.payroll.lite.entity;
 
+import com.tino.payroll.lite.enums.CurrencyCode;
 import com.tino.payroll.lite.enums.EmployeeStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -37,6 +38,11 @@ public class Employee {
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal basicSalary;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "salary_currency", nullable = false, columnDefinition = "varchar(10) default 'USD'")
+    @Builder.Default
+    private CurrencyCode salaryCurrency = CurrencyCode.USD;
 
     private LocalDate hireDate;
 

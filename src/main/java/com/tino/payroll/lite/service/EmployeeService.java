@@ -43,6 +43,7 @@ public class EmployeeService {
                 .email(email)
                 .jobTitle(request.getJobTitle().trim())
                 .basicSalary(request.getBasicSalary())
+                .salaryCurrency(request.getSalaryCurrency())
                 .hireDate(request.getHireDate())
                 .status(request.getStatus() == null ? EmployeeStatus.ACTIVE : request.getStatus())
                 .user(matchingUser)
@@ -82,6 +83,7 @@ public class EmployeeService {
         employee.setEmail(email);
         employee.setJobTitle(request.getJobTitle().trim());
         employee.setBasicSalary(request.getBasicSalary());
+        employee.setSalaryCurrency(request.getSalaryCurrency());
         employee.setHireDate(request.getHireDate());
         if (request.getStatus() != null) employee.setStatus(request.getStatus());
 
@@ -120,6 +122,7 @@ public class EmployeeService {
                 .email(employee.getEmail())
                 .jobTitle(employee.getJobTitle())
                 .basicSalary(employee.getBasicSalary())
+                .salaryCurrency(employee.getSalaryCurrency())
                 .hireDate(employee.getHireDate())
                 .status(employee.getStatus())
                 .userId(user == null ? null : user.getId())

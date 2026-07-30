@@ -1,6 +1,7 @@
 package com.tino.payroll.lite.repository;
 
 import com.tino.payroll.lite.entity.Employee;
+import com.tino.payroll.lite.enums.CurrencyCode;
 import com.tino.payroll.lite.enums.EmployeeStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -14,5 +15,6 @@ public interface EmployeeRepo extends JpaRepository<Employee, Long> {
     Optional<Employee> findByUserId(Long userId);
     boolean existsByUserId(Long userId);
     List<Employee> findAllByStatus(EmployeeStatus status);
+    List<Employee> findAllByStatusAndSalaryCurrency(EmployeeStatus status, CurrencyCode salaryCurrency);
     List<Employee> findAllByUserIsNull();
 }

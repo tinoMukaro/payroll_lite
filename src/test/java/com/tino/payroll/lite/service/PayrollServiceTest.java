@@ -4,6 +4,7 @@ import com.tino.payroll.lite.dto.CreatePayrollRunRequest;
 import com.tino.payroll.lite.entity.Employee;
 import com.tino.payroll.lite.entity.PayrollRun;
 import com.tino.payroll.lite.entity.Payslip;
+import com.tino.payroll.lite.enums.CurrencyCode;
 import com.tino.payroll.lite.enums.EmployeeStatus;
 import com.tino.payroll.lite.enums.PayrollStatus;
 import com.tino.payroll.lite.exception.DuplicatePayrollRunException;
@@ -46,7 +47,7 @@ class PayrollServiceTest {
     @Test
     void createPayrollRunRejectsDuplicatePeriod() {
         CreatePayrollRunRequest request = request(7, 2026);
-        when(payrollRunRepository.existsByMonthAndYear(7, 2026)).thenReturn(true);
+        when(payrollRunRepository.existsByMonthAndYearAndCurrency(7, 2026, CurrencyCode.USD)).thenReturn(true);
 
         assertThrows(DuplicatePayrollRunException.class,
                 () -> payrollService.createPayrollRun(request));
@@ -69,7 +70,7 @@ class PayrollServiceTest {
                 .build();
 
         when(payrollRunRepository.findById(1L)).thenReturn(Optional.of(payrollRun));
-        when(employeeRepo.findAllByStatus(EmployeeStatus.ACTIVE)).thenReturn(List.of(employee));
+        when(employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD)).thenReturn(List.of(employee));
         when(payrollRunRepository.save(any(PayrollRun.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -81,6 +82,7 @@ class PayrollServiceTest {
         Payslip payslip = captor.getValue().getFirst();
 
         assertEquals(new BigDecimal("1500.00"), payslip.getBasicSalary());
+        assertEquals(CurrencyCode.USD, payslip.getCurrency());
         assertEquals(new BigDecimal("1500.00"), payslip.getGrossSalary());
         assertEquals(0, BigDecimal.ZERO.compareTo(payslip.getTotalDeductions()));
         assertEquals(new BigDecimal("1500.00"), payslip.getNetSalary());
@@ -91,19 +93,20 @@ class PayrollServiceTest {
 
         employee.setBasicSalary(new BigDecimal("2000.00"));
         assertEquals(new BigDecimal("1500.00"), payslip.getBasicSalary());
+        assertEquals(CurrencyCode.USD, payslip.getCurrency());
     }
 
     @Test
     void processPayrollRunOnlyQueriesActiveEmployees() {
         PayrollRun payrollRun = draftPayrollRun();
         when(payrollRunRepository.findById(1L)).thenReturn(Optional.of(payrollRun));
-        when(employeeRepo.findAllByStatus(EmployeeStatus.ACTIVE)).thenReturn(List.of());
+        when(employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD)).thenReturn(List.of());
         when(payrollRunRepository.save(any(PayrollRun.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         payrollService.processPayrollRun(1L);
 
-        verify(employeeRepo).findAllByStatus(EmployeeStatus.ACTIVE);
+        verify(employeeRepo).findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD);
         verify(payslipRepository).saveAll(List.of());
     }
 
@@ -158,6 +161,7 @@ class PayrollServiceTest {
         CreatePayrollRunRequest request = new CreatePayrollRunRequest();
         request.setMonth(month);
         request.setYear(year);
+        request.setCurrency(CurrencyCode.USD);
         return request;
     }
 
@@ -166,6 +170,7 @@ class PayrollServiceTest {
         payrollRun.setId(1L);
         payrollRun.setMonth(7);
         payrollRun.setYear(2026);
+        payrollRun.setCurrency(CurrencyCode.USD);
         payrollRun.setStatus(PayrollStatus.DRAFT);
         return payrollRun;
     }

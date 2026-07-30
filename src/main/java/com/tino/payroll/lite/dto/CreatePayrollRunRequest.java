@@ -1,5 +1,7 @@
 package com.tino.payroll.lite.dto;
 
+import com.tino.payroll.lite.enums.CurrencyCode;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -16,4 +18,7 @@ public class CreatePayrollRunRequest {
     @NotNull(message = "Year is required")
     @Min(value = 2000, message = "Year must be 2000 or later")
     private Integer year;
+
+    @NotNull(message = "Payroll currency is required")
+    private CurrencyCode currency;
 }

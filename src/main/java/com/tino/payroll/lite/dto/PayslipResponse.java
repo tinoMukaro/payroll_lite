@@ -1,5 +1,7 @@
 package com.tino.payroll.lite.dto;
 
+import com.tino.payroll.lite.enums.CurrencyCode;
+
 import lombok.Builder;
 import lombok.Data;
 
@@ -16,6 +18,7 @@ public class PayslipResponse {
     private Long payrollRunId;
     private Integer month;
     private Integer year;
+    private CurrencyCode currency;
     private BigDecimal basicSalary;
     private BigDecimal grossSalary;
     private BigDecimal nssaDeduction;

@@ -1,5 +1,6 @@
 package com.tino.payroll.lite.dto;
 
+import com.tino.payroll.lite.enums.CurrencyCode;
 import com.tino.payroll.lite.enums.EmployeeStatus;
 import jakarta.validation.constraints.*;
 import lombok.Data;
@@ -27,6 +28,9 @@ public class CreateEmployeeRequest {
     @NotNull(message = "Basic salary is required")
     @Positive(message = "Salary must be greater than zero")
     private BigDecimal basicSalary;
+
+    @NotNull(message = "Salary currency is required")
+    private CurrencyCode salaryCurrency;
 
     @NotNull(message = "Hire date is required")
     @PastOrPresent(message = "Hire date cannot be in the future")
