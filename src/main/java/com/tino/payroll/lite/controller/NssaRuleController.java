@@ -25,17 +25,23 @@ import java.util.List;
 public class NssaRuleController {
 
     private final NssaRuleService service;
-
+   // -----------------------------------------------------
+    // GET ALL NSSA STATUTORY RULES
+    // ----------------------------------------------------
     @GetMapping
     public ResponseEntity<List<NssaRuleResponse>> getAll() {
         return ResponseEntity.ok(service.getAll());
     }
-
+   // -----------------------------------------------------
+    // ADD NEW NSSA RULE
+    // ----------------------------------------------------
     @PostMapping
     public ResponseEntity<NssaRuleResponse> create(@Valid @RequestBody NssaRuleRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request));
     }
-
+   // -----------------------------------------------------
+    // EDIT/UPDATE AN EXISTING NSSA RULE
+    // ----------------------------------------------------
     @PutMapping("/{id}")
     public ResponseEntity<NssaRuleResponse> update(
             @PathVariable Long id,

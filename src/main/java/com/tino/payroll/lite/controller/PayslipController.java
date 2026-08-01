@@ -20,7 +20,9 @@ import java.util.List;
 public class PayslipController {
 
     private final PayrollService payrollService;
-
+   // -----------------------------------------------------
+    // GET PAYSLIPS (USER ENDPOINT)
+    // ----------------------------------------------------
     @GetMapping("/me")
     public ResponseEntity<List<PayslipResponse>> getMyPayslips(Authentication authentication) {
         User user = (User) authentication.getPrincipal();

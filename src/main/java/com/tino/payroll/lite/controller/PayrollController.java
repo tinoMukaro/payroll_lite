@@ -20,7 +20,9 @@ import java.util.List;
 public class PayrollController {
 
     private final PayrollService payrollService;
-
+   // -----------------------------------------------------
+    // CRATE A PAYROLL RUN (DRAFT)
+    // ----------------------------------------------------
     @PostMapping
     public ResponseEntity<PayrollRunResponse> createPayrollRun(
             @Valid @RequestBody CreatePayrollRunRequest request
@@ -28,22 +30,30 @@ public class PayrollController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(payrollService.createPayrollRun(request));
     }
-
+   // -----------------------------------------------------
+    // GET ALL RUNS
+    // ----------------------------------------------------
     @GetMapping
     public ResponseEntity<List<PayrollRunResponse>> getAllPayrollRuns() {
         return ResponseEntity.ok(payrollService.getAllPayrollRuns());
     }
-
+   // -----------------------------------------------------
+    // GET RUN BY ID
+    // ----------------------------------------------------
     @GetMapping("/{id}")
     public ResponseEntity<PayrollRunResponse> getPayrollRun(@PathVariable Long id) {
         return ResponseEntity.ok(payrollService.getPayrollRun(id));
     }
-
+   // -----------------------------------------------------
+    // PROCESS A RUN(FROM -DRAFT -> PROCESSED)
+    // ----------------------------------------------------
     @PostMapping("/{id}/process")
     public ResponseEntity<PayrollRunResponse> processPayrollRun(@PathVariable Long id) {
         return ResponseEntity.ok(payrollService.processPayrollRun(id));
     }
-
+   // -----------------------------------------------------
+    // GET PAYSLIPS
+    // ----------------------------------------------------
     @GetMapping("/{id}/payslips")
     public ResponseEntity<List<PayslipResponse>> getPayslips(@PathVariable Long id) {
         return ResponseEntity.ok(payrollService.getPayslipsForPayrollRun(id));
