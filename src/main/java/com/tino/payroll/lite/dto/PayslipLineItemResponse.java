@@ -1,6 +1,7 @@
 package com.tino.payroll.lite.dto;
 
 import com.tino.payroll.lite.enums.PayrollAdjustmentType;
+import com.tino.payroll.lite.enums.PayItemSource;
 import lombok.Builder;
 import lombok.Data;
 
@@ -13,4 +14,5 @@ public class PayslipLineItemResponse {
     private String description;
     private BigDecimal amount;
     private boolean taxable;
+    private PayItemSource source;
 }

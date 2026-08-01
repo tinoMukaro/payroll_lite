@@ -5,8 +5,10 @@ import com.tino.payroll.lite.entity.Employee;
 import com.tino.payroll.lite.entity.PayrollAdjustment;
 import com.tino.payroll.lite.entity.PayrollRun;
 import com.tino.payroll.lite.entity.Payslip;
+import com.tino.payroll.lite.entity.RecurringPayItem;
 import com.tino.payroll.lite.enums.CurrencyCode;
 import com.tino.payroll.lite.enums.EmployeeStatus;
+import com.tino.payroll.lite.enums.PayItemSource;
 import com.tino.payroll.lite.enums.PayrollAdjustmentType;
 import com.tino.payroll.lite.enums.PayrollStatus;
 import com.tino.payroll.lite.exception.DuplicatePayrollRunException;
@@ -17,6 +19,7 @@ import com.tino.payroll.lite.repository.EmployeeRepo;
 import com.tino.payroll.lite.repository.PayrollAdjustmentRepository;
 import com.tino.payroll.lite.repository.PayrollRunRepository;
 import com.tino.payroll.lite.repository.PayslipRepository;
+import com.tino.payroll.lite.repository.RecurringPayItemRepository;
 import com.tino.payroll.lite.service.calculation.NssaCalculator;
 import com.tino.payroll.lite.service.calculation.NssaParameters;
 import com.tino.payroll.lite.service.calculation.NssaRuleResolver;
@@ -51,6 +54,8 @@ class PayrollServiceTest {
     @Mock
     private PayrollAdjustmentRepository adjustmentRepository;
     @Mock
+    private RecurringPayItemRepository recurringPayItemRepository;
+    @Mock
     private NssaRuleResolver nssaRuleResolver;
     @Mock
     private PayeTaxTableResolver payeTaxTableResolver;
@@ -66,6 +71,7 @@ class PayrollServiceTest {
         payeCalculator = new PayeCalculator();
         payrollService = new PayrollService(
                 payrollRunRepository, payslipRepository, employeeRepo, adjustmentRepository,
+                recurringPayItemRepository,
                 nssaRuleResolver, nssaCalculator,
                 payeTaxTableResolver, payeCalculator
         );
@@ -135,6 +141,58 @@ class PayrollServiceTest {
         employee.setBasicSalary(new BigDecimal("2000.00"));
         assertEquals(new BigDecimal("1500.00"), payslip.getBasicSalary());
         assertEquals(CurrencyCode.USD, payslip.getCurrency());
+    }
+
+    @Test
+    void processPayrollRunAutomaticallyAppliesApplicableRecurringItems() {
+        PayrollRun payrollRun = draftPayrollRun();
+        Employee employee = Employee.builder()
+                .id(10L)
+                .employeeNumber("EMP-10")
+                .firstName("Ada")
+                .lastName("Moyo")
+                .basicSalary(new BigDecimal("1500.00"))
+                .salaryCurrency(CurrencyCode.USD)
+                .status(EmployeeStatus.ACTIVE)
+                .build();
+        RecurringPayItem housingAllowance = recurringItem(
+                4L, employee, PayrollAdjustmentType.EARNING,
+                "Housing allowance", "100.00", true
+        );
+        RecurringPayItem medicalAid = recurringItem(
+                5L, employee, PayrollAdjustmentType.DEDUCTION,
+                "Medical aid", "30.00", false
+        );
+
+        when(payrollRunRepository.findById(1L)).thenReturn(Optional.of(payrollRun));
+        when(employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD))
+                .thenReturn(List.of(employee));
+        when(recurringPayItemRepository.findApplicable(
+                List.of(10L), LocalDate.of(2026, 7, 31)
+        )).thenReturn(List.of(housingAllowance, medicalAid));
+        when(nssaRuleResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenReturn(nssaParameters());
+        when(payeTaxTableResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenReturn(payeParameters());
+        when(payrollRunRepository.save(any(PayrollRun.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        payrollService.processPayrollRun(1L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Payslip>> captor = ArgumentCaptor.forClass(List.class);
+        verify(payslipRepository).saveAll(captor.capture());
+        Payslip payslip = captor.getValue().getFirst();
+
+        assertEquals(new BigDecimal("1600.00"), payslip.getGrossSalary());
+        assertEquals(new BigDecimal("1600.00"), payslip.getTaxableIncome());
+        assertEquals(new BigDecimal("395.00"), payslip.getIncomeTaxBeforeCredits());
+        assertEquals(new BigDecimal("11.85"), payslip.getAidsLevy());
+        assertEquals(new BigDecimal("406.85"), payslip.getPayeDeduction());
+        assertEquals(new BigDecimal("481.85"), payslip.getTotalDeductions());
+        assertEquals(new BigDecimal("1118.15"), payslip.getNetSalary());
+        assertEquals(2, payslip.getLineItems().size());
+        assertEquals(PayItemSource.RECURRING, payslip.getLineItems().getFirst().getSource());
     }
 
     @Test
@@ -270,7 +328,8 @@ class PayrollServiceTest {
 
         verifyNoInteractions(
                 employeeRepo, payslipRepository,
-                adjustmentRepository, nssaRuleResolver, payeTaxTableResolver
+                adjustmentRepository, recurringPayItemRepository,
+                nssaRuleResolver, payeTaxTableResolver
         );
     }
 
@@ -356,6 +415,24 @@ class PayrollServiceTest {
         adjustment.setAmount(new BigDecimal(amount));
         adjustment.setTaxable(taxable);
         return adjustment;
+    }
+    private RecurringPayItem recurringItem(
+            Long id,
+            Employee employee,
+            PayrollAdjustmentType type,
+            String description,
+            String amount,
+            boolean taxable
+    ) {
+        RecurringPayItem item = new RecurringPayItem();
+        item.setId(id);
+        item.setEmployee(employee);
+        item.setType(type);
+        item.setDescription(description);
+        item.setAmount(new BigDecimal(amount));
+        item.setTaxable(taxable);
+        item.setActive(true);
+        return item;
     }
     private CreatePayrollRunRequest request(Integer month, Integer year) {
         CreatePayrollRunRequest request = new CreatePayrollRunRequest();

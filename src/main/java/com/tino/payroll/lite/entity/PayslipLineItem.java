@@ -1,6 +1,7 @@
 package com.tino.payroll.lite.entity;
 
 import com.tino.payroll.lite.enums.PayrollAdjustmentType;
+import com.tino.payroll.lite.enums.PayItemSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -45,4 +46,9 @@ public class PayslipLineItem {
 
     @Column(nullable = false)
     private boolean taxable;
+
+    // Nullable so line items processed before source tracking remain readable.
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private PayItemSource source;
 }

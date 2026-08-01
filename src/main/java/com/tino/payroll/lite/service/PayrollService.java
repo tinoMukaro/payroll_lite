@@ -9,7 +9,9 @@ import com.tino.payroll.lite.entity.PayrollAdjustment;
 import com.tino.payroll.lite.entity.PayrollRun;
 import com.tino.payroll.lite.entity.Payslip;
 import com.tino.payroll.lite.entity.PayslipLineItem;
+import com.tino.payroll.lite.entity.RecurringPayItem;
 import com.tino.payroll.lite.enums.EmployeeStatus;
+import com.tino.payroll.lite.enums.PayItemSource;
 import com.tino.payroll.lite.enums.PayrollAdjustmentType;
 import com.tino.payroll.lite.enums.PayrollStatus;
 import com.tino.payroll.lite.exception.DuplicatePayrollRunException;
@@ -20,6 +22,7 @@ import com.tino.payroll.lite.repository.EmployeeRepo;
 import com.tino.payroll.lite.repository.PayrollAdjustmentRepository;
 import com.tino.payroll.lite.repository.PayrollRunRepository;
 import com.tino.payroll.lite.repository.PayslipRepository;
+import com.tino.payroll.lite.repository.RecurringPayItemRepository;
 import com.tino.payroll.lite.service.calculation.NssaCalculation;
 import com.tino.payroll.lite.service.calculation.NssaCalculator;
 import com.tino.payroll.lite.service.calculation.NssaParameters;
@@ -36,6 +39,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,6 +54,7 @@ public class PayrollService {
     private final PayslipRepository payslipRepository;
     private final EmployeeRepo employeeRepo;
     private final PayrollAdjustmentRepository adjustmentRepository;
+    private final RecurringPayItemRepository recurringPayItemRepository;
     private final NssaRuleResolver nssaRuleResolver;
     private final NssaCalculator nssaCalculator;
     private final PayeTaxTableResolver payeTaxTableResolver;
@@ -98,11 +103,19 @@ public class PayrollService {
                 EmployeeStatus.ACTIVE,
                 payrollRun.getCurrency()
         );
+        YearMonth payrollMonth = YearMonth.of(payrollRun.getYear(), payrollRun.getMonth());
         List<PayrollAdjustment> adjustments = adjustmentRepository
                 .findByPayrollRunIdOrderByIdAsc(payrollRun.getId());
         validateAdjustmentEligibility(adjustments, eligibleEmployees);
-        Map<Long, List<PayrollAdjustment>> adjustmentsByEmployee = adjustments.stream()
-                .collect(Collectors.groupingBy(adjustment -> adjustment.getEmployee().getId()));
+        List<Long> eligibleEmployeeIds = eligibleEmployees.stream().map(Employee::getId).toList();
+        List<RecurringPayItem> recurringPayItems = eligibleEmployeeIds.isEmpty()
+                ? List.of()
+                : recurringPayItemRepository.findApplicable(
+                        eligibleEmployeeIds, payrollMonth.atEndOfMonth()
+                );
+        Map<Long, List<PayInput>> payInputsByEmployee = groupPayInputs(
+                adjustments, recurringPayItems
+        );
 
         List<Payslip> payslips;
         if (eligibleEmployees.isEmpty()) {
@@ -110,11 +123,11 @@ public class PayrollService {
         } else {
             NssaParameters nssaParameters = nssaRuleResolver.resolve(
                     payrollRun.getCurrency(),
-                    YearMonth.of(payrollRun.getYear(), payrollRun.getMonth()).atEndOfMonth()
+                    payrollMonth.atEndOfMonth()
             );
             PayeParameters payeParameters = payeTaxTableResolver.resolve(
                     payrollRun.getCurrency(),
-                    YearMonth.of(payrollRun.getYear(), payrollRun.getMonth()).atEndOfMonth()
+                    payrollMonth.atEndOfMonth()
             );
             payslips = eligibleEmployees.stream()
                     .map(employee -> createPayslip(
@@ -122,7 +135,7 @@ public class PayrollService {
                             payrollRun,
                             nssaParameters,
                             payeParameters,
-                            adjustmentsByEmployee.getOrDefault(employee.getId(), Collections.emptyList())
+                            payInputsByEmployee.getOrDefault(employee.getId(), Collections.emptyList())
                     ))
                     .toList();
         }
@@ -158,19 +171,18 @@ public class PayrollService {
             PayrollRun payrollRun,
             NssaParameters nssaParameters,
             PayeParameters payeParameters,
-            List<PayrollAdjustment> adjustments
+            List<PayInput> payInputs
     ) {
         BigDecimal basicSalarySnapshot = employee.getBasicSalary();
-        BigDecimal additionalEarnings = sumAdjustments(
-                adjustments, adjustment -> adjustment.getType() == PayrollAdjustmentType.EARNING
+        BigDecimal additionalEarnings = sumPayInputs(
+                payInputs, input -> input.type() == PayrollAdjustmentType.EARNING
         );
-        BigDecimal taxableEarnings = sumAdjustments(
-                adjustments,
-                adjustment -> adjustment.getType() == PayrollAdjustmentType.EARNING
-                        && adjustment.isTaxable()
+        BigDecimal taxableEarnings = sumPayInputs(
+                payInputs,
+                input -> input.type() == PayrollAdjustmentType.EARNING && input.taxable()
         );
-        BigDecimal otherDeductions = sumAdjustments(
-                adjustments, adjustment -> adjustment.getType() == PayrollAdjustmentType.DEDUCTION
+        BigDecimal otherDeductions = sumPayInputs(
+                payInputs, input -> input.type() == PayrollAdjustmentType.DEDUCTION
         );
         BigDecimal grossSalary = basicSalarySnapshot.add(additionalEarnings);
         BigDecimal taxableIncome = basicSalarySnapshot.add(taxableEarnings);
@@ -205,7 +217,7 @@ public class PayrollService {
         payslip.setPayeRuleVersion(payeCalculation.ruleVersion());
         payslip.setTotalDeductions(totalDeductions);
         payslip.setNetSalary(grossSalary.subtract(totalDeductions));
-        adjustments.stream()
+        payInputs.stream()
                 .map(this::snapshotLineItem)
                 .forEach(payslip::addLineItem);
         return payslip;
@@ -229,22 +241,51 @@ public class PayrollService {
                 });
     }
 
-    private BigDecimal sumAdjustments(
+    private Map<Long, List<PayInput>> groupPayInputs(
             List<PayrollAdjustment> adjustments,
-            Predicate<PayrollAdjustment> predicate
+            List<RecurringPayItem> recurringPayItems
     ) {
-        return adjustments.stream()
+        Map<Long, List<PayInput>> grouped = new HashMap<>();
+        adjustments.forEach(adjustment -> grouped
+                .computeIfAbsent(adjustment.getEmployee().getId(), ignored -> new java.util.ArrayList<>())
+                .add(toPayInput(adjustment)));
+        recurringPayItems.forEach(item -> grouped
+                .computeIfAbsent(item.getEmployee().getId(), ignored -> new java.util.ArrayList<>())
+                .add(toPayInput(item)));
+        return grouped;
+    }
+
+    private PayInput toPayInput(PayrollAdjustment adjustment) {
+        return new PayInput(
+                adjustment.getType(), adjustment.getDescription(), adjustment.getAmount(),
+                adjustment.isTaxable(), PayItemSource.ONE_OFF
+        );
+    }
+
+    private PayInput toPayInput(RecurringPayItem item) {
+        return new PayInput(
+                item.getType(), item.getDescription(), item.getAmount(),
+                item.isTaxable(), PayItemSource.RECURRING
+        );
+    }
+
+    private BigDecimal sumPayInputs(
+            List<PayInput> inputs,
+            Predicate<PayInput> predicate
+    ) {
+        return inputs.stream()
                 .filter(predicate)
-                .map(PayrollAdjustment::getAmount)
+                .map(PayInput::amount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private PayslipLineItem snapshotLineItem(PayrollAdjustment adjustment) {
+    private PayslipLineItem snapshotLineItem(PayInput input) {
         PayslipLineItem lineItem = new PayslipLineItem();
-        lineItem.setType(adjustment.getType());
-        lineItem.setDescription(adjustment.getDescription());
-        lineItem.setAmount(adjustment.getAmount());
-        lineItem.setTaxable(adjustment.isTaxable());
+        lineItem.setType(input.type());
+        lineItem.setDescription(input.description());
+        lineItem.setAmount(input.amount());
+        lineItem.setTaxable(input.taxable());
+        lineItem.setSource(input.source());
         return lineItem;
     }
     private PayrollRunResponse mapPayrollRun(PayrollRun payrollRun) {
@@ -312,6 +353,7 @@ public class PayrollService {
                 .description(lineItem.getDescription())
                 .amount(lineItem.getAmount())
                 .taxable(lineItem.isTaxable())
+                .source(lineItem.getSource() == null ? PayItemSource.ONE_OFF : lineItem.getSource())
                 .build();
     }
 
@@ -322,4 +364,12 @@ public class PayrollService {
     private BigDecimal orDefault(BigDecimal value, BigDecimal fallback) {
         return value == null ? fallback : value;
     }
+
+    private record PayInput(
+            PayrollAdjustmentType type,
+            String description,
+            BigDecimal amount,
+            boolean taxable,
+            PayItemSource source
+    ) {}
 }

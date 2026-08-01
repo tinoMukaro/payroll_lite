@@ -1,10 +1,10 @@
 # Payroll Lite API
  
-Payroll Lite API is a RESTful payroll-management backend built with Spring Boot and PostgreSQL. It currently supports account authentication, role-based access, employee records, multi-currency payroll runs, Zimbabwe-style NSSA and PAYE calculation, one-off payroll adjustments, and employee self-service payslips.
+Payroll Lite API is a RESTful payroll-management backend built with Spring Boot and PostgreSQL. It currently supports account authentication, role-based access, employee records, multi-currency payroll runs, Zimbabwe-style NSSA and PAYE calculation, one-off and fixed recurring pay items, and employee self-service payslips.
 
 This repository is an active learning project, but its structure and documentation are intended to be understandable to both junior and senior developers.
 
-> **Project status:** Active development. NSSA, progressive PAYE, and one-off earning/deduction adjustments are implemented. Employee-specific tax credits and recurring adjustments are planned.
+> **Project status:** Active development. NSSA, progressive PAYE, one-off adjustments, and effective-dated fixed recurring earnings/deductions are implemented. Employee-specific tax credits are planned.
 
 ## Table of contents
 
@@ -44,6 +44,7 @@ The current API provides:
 - Effective-dated monthly PAYE tables with progressive bands, tax credits, and AIDS levy calculation.
 - Admin/HR endpoints and UI support for managing PAYE tables without direct database access.
 - One-off taxable or non-taxable earnings and after-tax deductions on draft payroll runs.
+- Fixed recurring employee earnings and deductions with effective dates and active-state management.
 - Immutable salary and statutory snapshots on generated payslips.
 - Employee access to only their own payslips.
 - OpenAPI documentation through Swagger UI.
@@ -114,6 +115,7 @@ erDiagram
     PAYROLL_RUN ||--o{ PAYSLIP : contains
     EMPLOYEE ||--o{ PAYROLL_ADJUSTMENT : receives
     PAYROLL_RUN ||--o{ PAYROLL_ADJUSTMENT : stages
+    EMPLOYEE ||--o{ RECURRING_PAY_ITEM : configures
     PAYSLIP ||--o{ PAYSLIP_LINE_ITEM : snapshots
     NSSA_RULE }o..|| PAYROLL_RUN : "resolved logically by currency and period"
 ```
@@ -155,9 +157,9 @@ A payroll run is unique by month, year, and currency. New runs begin in `DRAFT`.
 Processing a draft run performs one database transaction:
 
 1. Load employees whose status is `ACTIVE` and whose salary currency matches the run.
-2. Load the run's one-off adjustments and verify that every referenced employee is still eligible.
+2. Load the run's one-off adjustments and each employee's recurring items that cover the payroll date.
 3. Resolve the active NSSA rule and PAYE table that cover the last day of the payroll month.
-4. Add all earnings to gross salary and taxable earnings to PAYE income; keep basic salary as the NSSA pensionable input.
+4. Add all one-off and recurring earnings to gross salary and taxable earnings to PAYE income; keep basic salary as the NSSA pensionable input.
 5. Cap pensionable earnings at the rule's ceiling.
 6. Calculate employee and employer NSSA contributions.
 7. Calculate PAYE from basic salary plus taxable earnings.
@@ -171,10 +173,10 @@ Current calculation:
 pensionable earnings = min(basic salary, NSSA ceiling)
 employee NSSA        = pensionable earnings x employee rate
 employer NSSA        = pensionable earnings x employer rate
-gross salary         = basic salary + all one-off earnings
-taxable income       = basic salary + taxable one-off earnings
+gross salary         = basic salary + all one-off and recurring earnings
+taxable income       = basic salary + all taxable earnings
 PAYE                 = progressive tax after credits + AIDS levy
-total deductions     = employee NSSA + PAYE + one-off deductions
+total deductions     = employee NSSA + PAYE + one-off and recurring deductions
 net salary           = gross salary - total deductions
 ```
 
@@ -183,6 +185,8 @@ Important processing behavior:
 - A processed run cannot be processed again.
 - Adjustments can only be added or removed while the run is `DRAFT`.
 - An adjustment employee must be active and use the same currency as the run.
+- An active recurring item applies when its date range covers the last day of the payroll month; fixed amounts are not prorated.
+- Updating or deactivating a recurring template does not change previously generated payslip snapshots.
 - If eligible employees exist but no single NSSA rule applies, processing fails with `422 Unprocessable Entity`.
 - The transaction prevents partial payslips from being saved when statutory configuration is invalid.
 - If no employees are eligible, the run is processed with an empty payslip list and no NSSA rule is required.
@@ -212,7 +216,7 @@ taxable income
     -> total PAYE
 ```
 
-`PayrollService` passes basic salary plus taxable one-off earnings as taxable income and currently applies zero employee-specific credits. The resulting tax before credits, credits applied, AIDS levy, total PAYE, and table version are stored on every new payslip. Exemptions, pension deductions, and employee tax credits will be modeled in a later phase.
+`PayrollService` passes basic salary plus all taxable one-off and recurring earnings as taxable income and currently applies zero employee-specific credits. The resulting tax before credits, credits applied, AIDS levy, total PAYE, and table version are stored on every new payslip. Exemptions, pension deductions, and employee tax credits will be modeled in a later phase.
 
 ## Prerequisites
 
@@ -395,8 +399,10 @@ The default token lifetime is 24 hours. JWT claims include the email subject, ro
 | Register and log in | Yes | Yes | Yes |
 | View own session and payslips | Yes | Yes | Yes |
 | Manage employees | Yes | Yes | No |
+| Manage recurring and one-off pay items | Yes | Yes | No |
 | Manage payroll runs | Yes | Yes | No |
 | Manage NSSA rules | Yes | Yes | No |
+| Manage PAYE tables | Yes | Yes | No |
 | List users | Yes | No | No |
 | Change user roles | Yes | No | No |
 
@@ -423,6 +429,9 @@ All request and response bodies use JSON unless otherwise stated.
 | `GET` | `/api/employees/{id}` | Admin, HR | `200 OK` |
 | `PUT` | `/api/employees/{id}` | Admin, HR | `200 OK` |
 | `DELETE` | `/api/employees/{id}` | Admin, HR | `204 No Content` |
+| `GET` | `/api/employees/{id}/recurring-pay-items` | Admin, HR | `200 OK` |
+| `POST` | `/api/employees/{id}/recurring-pay-items` | Admin, HR | `201 Created` |
+| `PUT` | `/api/employees/{id}/recurring-pay-items/{payItemId}` | Admin, HR | `200 OK` |
 
 > Employee deletion is currently a **physical delete**, not a soft delete. Existing foreign-key relationships, such as payslips, may prevent deletion.
 
@@ -577,6 +586,7 @@ curl -X PATCH http://localhost:9090/api/users/2/role \
 | NSSA rule create/update | Unique `version`, `currency`, `effectiveFrom`, decimal rates from 0-1, positive ceiling, `active`; `effectiveTo` is optional |
 | PAYE table create/update | Unique `version`, `currency`, effective dates, decimal AIDS levy, `active`, and contiguous progressive `bands` ending open-ended |
 | Payroll adjustment create | Eligible `employeeId`, `EARNING` or `DEDUCTION`, description, positive amount with at most two decimals, and optional taxable flag for earnings |
+| Recurring pay item create/update | `EARNING` or `DEDUCTION`, description, fixed positive amount, effective-from date, optional effective-to date, active state, and optional taxable flag for earnings |
 | Role update | `role` |
 
 ## Errors and status codes
@@ -618,8 +628,9 @@ Primary tables:
 | `paye_tax_bands` | Ordered progressive bands belonging to a PAYE table |
 | `payroll_runs` | Monthly payroll lifecycle by currency |
 | `payroll_adjustments` | Editable one-off inputs belonging to a draft run and employee |
+| `recurring_pay_items` | Effective-dated fixed earning/deduction templates belonging to employees |
 | `payslips` | Employee salary, deduction, and rule snapshots |
-| `payslip_line_items` | Immutable earning/deduction lines copied during payroll processing |
+| `payslip_line_items` | Immutable earning/deduction lines with one-off or recurring source copied during payroll processing |
 
 Important database constraints include:
 
@@ -667,6 +678,7 @@ The current suite covers:
 - Effective-dated PAYE table resolution.
 - Payroll state transitions and transactional failure.
 - Draft adjustment validation, taxable earning calculations, and immutable payslip line snapshots.
+- Recurring item date selection, updates/deactivation, and automatic payroll inclusion.
 - Employee self-service payslip isolation.
 - Application-context startup.
 
@@ -751,7 +763,7 @@ A payslip response includes:
 ## Known limitations
 
 - PAYE currently applies zero employee-specific credits.
-- One-off allowances, overtime, bonuses, reimbursements, and deductions are supported; recurring pay items and benefit-specific rules are not.
+- One-off and fixed recurring items are supported; percentage-based items, balances, installment schedules, and benefit-specific rules are not.
 - NSSA and PAYE are the only statutory calculations currently implemented.
 - Payroll has no review, approval, reversal, or cancellation endpoint.
 - Payslip PDF generation and download are not implemented.
@@ -790,13 +802,12 @@ Before treating this project as a production payroll system:
 
 Suggested delivery order:
 
-1. Recurring earning and deduction templates.
-2. Employee-specific exemptions, pensions, and tax credits.
-3. Payroll review and approval workflow.
-4. Employer-cost and statutory summary reporting.
-5. Payslip PDF generation and download.
-6. Versioned database migrations and audit history.
-7. Pagination, filtering, and richer OpenAPI documentation.
+1. Employee-specific exemptions, pensions, and tax credits.
+2. Payroll review and approval workflow.
+3. Employer-cost and statutory summary reporting.
+4. Payslip PDF generation and download.
+5. Versioned database migrations and audit history.
+6. Pagination, filtering, and richer OpenAPI documentation.
 
 ## License
 

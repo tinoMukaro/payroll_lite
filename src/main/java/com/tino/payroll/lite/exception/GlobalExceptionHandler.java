@@ -13,6 +13,13 @@ import java.time.LocalDateTime;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(RecurringPayItemNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleRecurringPayItemNotFound(
+            RecurringPayItemNotFoundException exception, HttpServletRequest request
+    ) {
+        return buildError(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
+
     @ExceptionHandler(PayrollAdjustmentNotFoundException.class)
     public ResponseEntity<ErrorResponse> handlePayrollAdjustmentNotFound(
             PayrollAdjustmentNotFoundException exception, HttpServletRequest request
