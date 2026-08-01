@@ -11,6 +11,8 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -87,6 +89,15 @@ public class Payslip {
     
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "payslip", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    private List<PayslipLineItem> lineItems = new ArrayList<>();
+
+    public void addLineItem(PayslipLineItem lineItem) {
+        lineItem.setPayslip(this);
+        lineItems.add(lineItem);
+    }
 
     @PrePersist
     void onCreate() {

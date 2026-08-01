@@ -2,16 +2,19 @@ package com.tino.payroll.lite.service;
 
 import com.tino.payroll.lite.dto.CreatePayrollRunRequest;
 import com.tino.payroll.lite.entity.Employee;
+import com.tino.payroll.lite.entity.PayrollAdjustment;
 import com.tino.payroll.lite.entity.PayrollRun;
 import com.tino.payroll.lite.entity.Payslip;
 import com.tino.payroll.lite.enums.CurrencyCode;
 import com.tino.payroll.lite.enums.EmployeeStatus;
+import com.tino.payroll.lite.enums.PayrollAdjustmentType;
 import com.tino.payroll.lite.enums.PayrollStatus;
 import com.tino.payroll.lite.exception.DuplicatePayrollRunException;
 import com.tino.payroll.lite.exception.InvalidPayrollStateException;
 import com.tino.payroll.lite.exception.PayrollConfigurationException;
 import com.tino.payroll.lite.exception.PayrollRunNotFoundException;
 import com.tino.payroll.lite.repository.EmployeeRepo;
+import com.tino.payroll.lite.repository.PayrollAdjustmentRepository;
 import com.tino.payroll.lite.repository.PayrollRunRepository;
 import com.tino.payroll.lite.repository.PayslipRepository;
 import com.tino.payroll.lite.service.calculation.NssaCalculator;
@@ -46,6 +49,8 @@ class PayrollServiceTest {
     @Mock
     private EmployeeRepo employeeRepo;
     @Mock
+    private PayrollAdjustmentRepository adjustmentRepository;
+    @Mock
     private NssaRuleResolver nssaRuleResolver;
     @Mock
     private PayeTaxTableResolver payeTaxTableResolver;
@@ -60,7 +65,7 @@ class PayrollServiceTest {
         nssaCalculator = new NssaCalculator();
         payeCalculator = new PayeCalculator();
         payrollService = new PayrollService(
-                payrollRunRepository, payslipRepository, employeeRepo,
+                payrollRunRepository, payslipRepository, employeeRepo, adjustmentRepository,
                 nssaRuleResolver, nssaCalculator,
                 payeTaxTableResolver, payeCalculator
         );
@@ -130,6 +135,66 @@ class PayrollServiceTest {
         employee.setBasicSalary(new BigDecimal("2000.00"));
         assertEquals(new BigDecimal("1500.00"), payslip.getBasicSalary());
         assertEquals(CurrencyCode.USD, payslip.getCurrency());
+    }
+
+    @Test
+    void processPayrollRunAppliesAndSnapshotsOneOffAdjustments() {
+        PayrollRun payrollRun = draftPayrollRun();
+        Employee employee = Employee.builder()
+                .id(10L)
+                .employeeNumber("EMP-10")
+                .firstName("Ada")
+                .lastName("Moyo")
+                .basicSalary(new BigDecimal("1500.00"))
+                .salaryCurrency(CurrencyCode.USD)
+                .status(EmployeeStatus.ACTIVE)
+                .build();
+        PayrollAdjustment taxableBonus = adjustment(
+                1L, employee, payrollRun, PayrollAdjustmentType.EARNING,
+                "Performance bonus", "200.00", true
+        );
+        PayrollAdjustment nonTaxableAllowance = adjustment(
+                2L, employee, payrollRun, PayrollAdjustmentType.EARNING,
+                "Reimbursement", "50.00", false
+        );
+        PayrollAdjustment loanRepayment = adjustment(
+                3L, employee, payrollRun, PayrollAdjustmentType.DEDUCTION,
+                "Loan repayment", "75.00", false
+        );
+
+        when(payrollRunRepository.findById(1L)).thenReturn(Optional.of(payrollRun));
+        when(employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD))
+                .thenReturn(List.of(employee));
+        when(adjustmentRepository.findByPayrollRunIdOrderByIdAsc(1L))
+                .thenReturn(List.of(taxableBonus, nonTaxableAllowance, loanRepayment));
+        when(nssaRuleResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenReturn(nssaParameters());
+        when(payeTaxTableResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenReturn(payeParameters());
+        when(payrollRunRepository.save(any(PayrollRun.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        payrollService.processPayrollRun(1L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Payslip>> captor = ArgumentCaptor.forClass(List.class);
+        verify(payslipRepository).saveAll(captor.capture());
+        Payslip payslip = captor.getValue().getFirst();
+
+        assertEquals(new BigDecimal("1750.00"), payslip.getGrossSalary());
+        assertEquals(new BigDecimal("1700.00"), payslip.getTaxableIncome());
+        assertEquals(new BigDecimal("425.00"), payslip.getIncomeTaxBeforeCredits());
+        assertEquals(new BigDecimal("12.75"), payslip.getAidsLevy());
+        assertEquals(new BigDecimal("437.75"), payslip.getPayeDeduction());
+        assertEquals(new BigDecimal("557.75"), payslip.getTotalDeductions());
+        assertEquals(new BigDecimal("1192.25"), payslip.getNetSalary());
+        assertEquals(3, payslip.getLineItems().size());
+        assertEquals("Performance bonus", payslip.getLineItems().getFirst().getDescription());
+        assertTrue(payslip.getLineItems().getFirst().isTaxable());
+        assertSame(payslip, payslip.getLineItems().getFirst().getPayslip());
+
+        taxableBonus.setAmount(new BigDecimal("999.00"));
+        assertEquals(new BigDecimal("200.00"), payslip.getLineItems().getFirst().getAmount());
     }
 
     @Test
@@ -205,7 +270,7 @@ class PayrollServiceTest {
 
         verifyNoInteractions(
                 employeeRepo, payslipRepository,
-                nssaRuleResolver, payeTaxTableResolver
+                adjustmentRepository, nssaRuleResolver, payeTaxTableResolver
         );
     }
 
@@ -272,6 +337,25 @@ class PayrollServiceTest {
                 upper == null ? null : new BigDecimal(upper),
                 new BigDecimal(rate)
         );
+    }
+    private PayrollAdjustment adjustment(
+            Long id,
+            Employee employee,
+            PayrollRun payrollRun,
+            PayrollAdjustmentType type,
+            String description,
+            String amount,
+            boolean taxable
+    ) {
+        PayrollAdjustment adjustment = new PayrollAdjustment();
+        adjustment.setId(id);
+        adjustment.setEmployee(employee);
+        adjustment.setPayrollRun(payrollRun);
+        adjustment.setType(type);
+        adjustment.setDescription(description);
+        adjustment.setAmount(new BigDecimal(amount));
+        adjustment.setTaxable(taxable);
+        return adjustment;
     }
     private CreatePayrollRunRequest request(Integer month, Integer year) {
         CreatePayrollRunRequest request = new CreatePayrollRunRequest();

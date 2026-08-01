@@ -2,16 +2,22 @@ package com.tino.payroll.lite.service;
 
 import com.tino.payroll.lite.dto.CreatePayrollRunRequest;
 import com.tino.payroll.lite.dto.PayrollRunResponse;
+import com.tino.payroll.lite.dto.PayslipLineItemResponse;
 import com.tino.payroll.lite.dto.PayslipResponse;
 import com.tino.payroll.lite.entity.Employee;
+import com.tino.payroll.lite.entity.PayrollAdjustment;
 import com.tino.payroll.lite.entity.PayrollRun;
 import com.tino.payroll.lite.entity.Payslip;
+import com.tino.payroll.lite.entity.PayslipLineItem;
 import com.tino.payroll.lite.enums.EmployeeStatus;
+import com.tino.payroll.lite.enums.PayrollAdjustmentType;
 import com.tino.payroll.lite.enums.PayrollStatus;
 import com.tino.payroll.lite.exception.DuplicatePayrollRunException;
 import com.tino.payroll.lite.exception.InvalidPayrollStateException;
+import com.tino.payroll.lite.exception.PayrollConfigurationException;
 import com.tino.payroll.lite.exception.PayrollRunNotFoundException;
 import com.tino.payroll.lite.repository.EmployeeRepo;
+import com.tino.payroll.lite.repository.PayrollAdjustmentRepository;
 import com.tino.payroll.lite.repository.PayrollRunRepository;
 import com.tino.payroll.lite.repository.PayslipRepository;
 import com.tino.payroll.lite.service.calculation.NssaCalculation;
@@ -29,7 +35,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +49,7 @@ public class PayrollService {
     private final PayrollRunRepository payrollRunRepository;
     private final PayslipRepository payslipRepository;
     private final EmployeeRepo employeeRepo;
+    private final PayrollAdjustmentRepository adjustmentRepository;
     private final NssaRuleResolver nssaRuleResolver;
     private final NssaCalculator nssaCalculator;
     private final PayeTaxTableResolver payeTaxTableResolver;
@@ -86,6 +98,11 @@ public class PayrollService {
                 EmployeeStatus.ACTIVE,
                 payrollRun.getCurrency()
         );
+        List<PayrollAdjustment> adjustments = adjustmentRepository
+                .findByPayrollRunIdOrderByIdAsc(payrollRun.getId());
+        validateAdjustmentEligibility(adjustments, eligibleEmployees);
+        Map<Long, List<PayrollAdjustment>> adjustmentsByEmployee = adjustments.stream()
+                .collect(Collectors.groupingBy(adjustment -> adjustment.getEmployee().getId()));
 
         List<Payslip> payslips;
         if (eligibleEmployees.isEmpty()) {
@@ -101,7 +118,11 @@ public class PayrollService {
             );
             payslips = eligibleEmployees.stream()
                     .map(employee -> createPayslip(
-                            employee, payrollRun, nssaParameters, payeParameters
+                            employee,
+                            payrollRun,
+                            nssaParameters,
+                            payeParameters,
+                            adjustmentsByEmployee.getOrDefault(employee.getId(), Collections.emptyList())
                     ))
                     .toList();
         }
@@ -136,27 +157,42 @@ public class PayrollService {
             Employee employee,
             PayrollRun payrollRun,
             NssaParameters nssaParameters,
-            PayeParameters payeParameters
+            PayeParameters payeParameters,
+            List<PayrollAdjustment> adjustments
     ) {
         BigDecimal basicSalarySnapshot = employee.getBasicSalary();
+        BigDecimal additionalEarnings = sumAdjustments(
+                adjustments, adjustment -> adjustment.getType() == PayrollAdjustmentType.EARNING
+        );
+        BigDecimal taxableEarnings = sumAdjustments(
+                adjustments,
+                adjustment -> adjustment.getType() == PayrollAdjustmentType.EARNING
+                        && adjustment.isTaxable()
+        );
+        BigDecimal otherDeductions = sumAdjustments(
+                adjustments, adjustment -> adjustment.getType() == PayrollAdjustmentType.DEDUCTION
+        );
+        BigDecimal grossSalary = basicSalarySnapshot.add(additionalEarnings);
+        BigDecimal taxableIncome = basicSalarySnapshot.add(taxableEarnings);
         NssaCalculation nssaCalculation = nssaCalculator.calculate(
                 basicSalarySnapshot,
                 nssaParameters
         );
         PayeCalculation payeCalculation = payeCalculator.calculate(
-                basicSalarySnapshot,
+                taxableIncome,
                 BigDecimal.ZERO,
                 payeParameters
         );
         BigDecimal totalDeductions = nssaCalculation.employeeContribution()
-                .add(payeCalculation.totalPaye());
+                .add(payeCalculation.totalPaye())
+                .add(otherDeductions);
 
         Payslip payslip = new Payslip();
         payslip.setEmployee(employee);
         payslip.setPayrollRun(payrollRun);
         payslip.setBasicSalary(basicSalarySnapshot);
         payslip.setCurrency(payrollRun.getCurrency());
-        payslip.setGrossSalary(basicSalarySnapshot);
+        payslip.setGrossSalary(grossSalary);
         payslip.setPensionableEarnings(nssaCalculation.pensionableEarnings());
         payslip.setEmployeeNssaContribution(nssaCalculation.employeeContribution());
         payslip.setEmployerNssaContribution(nssaCalculation.employerContribution());
@@ -168,8 +204,48 @@ public class PayrollService {
         payslip.setAidsLevy(payeCalculation.aidsLevy());
         payslip.setPayeRuleVersion(payeCalculation.ruleVersion());
         payslip.setTotalDeductions(totalDeductions);
-        payslip.setNetSalary(basicSalarySnapshot.subtract(totalDeductions));
+        payslip.setNetSalary(grossSalary.subtract(totalDeductions));
+        adjustments.stream()
+                .map(this::snapshotLineItem)
+                .forEach(payslip::addLineItem);
         return payslip;
+    }
+
+    private void validateAdjustmentEligibility(
+            List<PayrollAdjustment> adjustments,
+            List<Employee> eligibleEmployees
+    ) {
+        Set<Long> eligibleEmployeeIds = eligibleEmployees.stream()
+                .map(Employee::getId)
+                .collect(Collectors.toSet());
+        adjustments.stream()
+                .filter(adjustment -> !eligibleEmployeeIds.contains(adjustment.getEmployee().getId()))
+                .findFirst()
+                .ifPresent(adjustment -> {
+                    throw new PayrollConfigurationException(
+                            "Adjustment " + adjustment.getId()
+                                    + " belongs to an employee who is no longer eligible for this payroll run"
+                    );
+                });
+    }
+
+    private BigDecimal sumAdjustments(
+            List<PayrollAdjustment> adjustments,
+            Predicate<PayrollAdjustment> predicate
+    ) {
+        return adjustments.stream()
+                .filter(predicate)
+                .map(PayrollAdjustment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private PayslipLineItem snapshotLineItem(PayrollAdjustment adjustment) {
+        PayslipLineItem lineItem = new PayslipLineItem();
+        lineItem.setType(adjustment.getType());
+        lineItem.setDescription(adjustment.getDescription());
+        lineItem.setAmount(adjustment.getAmount());
+        lineItem.setTaxable(adjustment.isTaxable());
+        return lineItem;
     }
     private PayrollRunResponse mapPayrollRun(PayrollRun payrollRun) {
         return PayrollRunResponse.builder()
@@ -185,6 +261,9 @@ public class PayrollService {
 
     private PayslipResponse mapPayslip(Payslip payslip) {
         Employee employee = payslip.getEmployee();
+        List<PayslipLineItem> lineItems = payslip.getLineItems() == null
+                ? Collections.emptyList()
+                : payslip.getLineItems();
         return PayslipResponse.builder()
                 .id(payslip.getId())
                 .employeeId(employee.getId())
@@ -210,7 +289,29 @@ public class PayrollService {
                         : payslip.getPayeRuleVersion())
                 .totalDeductions(payslip.getTotalDeductions())
                 .netSalary(payslip.getNetSalary())
+                .additionalEarnings(sumLineItems(lineItems, PayrollAdjustmentType.EARNING))
+                .otherDeductions(sumLineItems(lineItems, PayrollAdjustmentType.DEDUCTION))
+                .lineItems(lineItems.stream().map(this::mapLineItem).toList())
                 .createdAt(payslip.getCreatedAt())
+                .build();
+    }
+
+    private BigDecimal sumLineItems(
+            List<PayslipLineItem> lineItems,
+            PayrollAdjustmentType type
+    ) {
+        return lineItems.stream()
+                .filter(lineItem -> lineItem.getType() == type)
+                .map(PayslipLineItem::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private PayslipLineItemResponse mapLineItem(PayslipLineItem lineItem) {
+        return PayslipLineItemResponse.builder()
+                .type(lineItem.getType())
+                .description(lineItem.getDescription())
+                .amount(lineItem.getAmount())
+                .taxable(lineItem.isTaxable())
                 .build();
     }
 

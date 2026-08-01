@@ -7,6 +7,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -33,5 +34,8 @@ public class PayslipResponse {
     private String payeRuleVersion;
     private BigDecimal totalDeductions;
     private BigDecimal netSalary;
+    private BigDecimal additionalEarnings;
+    private BigDecimal otherDeductions;
+    private List<PayslipLineItemResponse> lineItems;
     private LocalDateTime createdAt;
 }
