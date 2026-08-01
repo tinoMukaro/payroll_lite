@@ -144,6 +144,39 @@ class PayrollServiceTest {
     }
 
     @Test
+    void previewReturnsTheCalculationWithoutSavingOrChangingTheRun() {
+        PayrollRun payrollRun = draftPayrollRun();
+        Employee employee = Employee.builder()
+                .id(10L)
+                .employeeNumber("EMP-10")
+                .firstName("Ada")
+                .lastName("Moyo")
+                .basicSalary(new BigDecimal("1500.00"))
+                .salaryCurrency(CurrencyCode.USD)
+                .status(EmployeeStatus.ACTIVE)
+                .build();
+        when(payrollRunRepository.findById(1L)).thenReturn(Optional.of(payrollRun));
+        when(employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD))
+                .thenReturn(List.of(employee));
+        when(nssaRuleResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenReturn(nssaParameters());
+        when(payeTaxTableResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenReturn(payeParameters());
+
+        var preview = payrollService.previewPayrollRun(1L);
+
+        assertEquals(1, preview.size());
+        assertNull(preview.getFirst().getId());
+        assertEquals(new BigDecimal("1500.00"), preview.getFirst().getGrossSalary());
+        assertEquals(new BigDecimal("420.95"), preview.getFirst().getTotalDeductions());
+        assertEquals(new BigDecimal("1079.05"), preview.getFirst().getNetSalary());
+        assertEquals(PayrollStatus.DRAFT, payrollRun.getStatus());
+        assertNull(payrollRun.getProcessedAt());
+        verify(payslipRepository, never()).saveAll(any());
+        verify(payrollRunRepository, never()).save(any());
+    }
+
+    @Test
     void processPayrollRunAutomaticallyAppliesApplicableRecurringItems() {
         PayrollRun payrollRun = draftPayrollRun();
         Employee employee = Employee.builder()

@@ -5,6 +5,7 @@ import com.tino.payroll.lite.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -12,6 +13,34 @@ import java.time.LocalDateTime;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(LastAdministratorException.class)
+    public ResponseEntity<ErrorResponse> handleLastAdministrator(
+            LastAdministratorException exception, HttpServletRequest request
+    ) {
+        return buildError(HttpStatus.CONFLICT, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleUserNotFound(
+            UserNotFoundException exception, HttpServletRequest request
+    ) {
+        return buildError(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(
+            AccessDeniedException exception, HttpServletRequest request
+    ) {
+        return buildError(HttpStatus.FORBIDDEN, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(PayslipNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePayslipNotFound(
+            PayslipNotFoundException exception, HttpServletRequest request
+    ) {
+        return buildError(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
 
     @ExceptionHandler(RecurringPayItemNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleRecurringPayItemNotFound(

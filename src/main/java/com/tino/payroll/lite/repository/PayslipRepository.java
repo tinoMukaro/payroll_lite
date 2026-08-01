@@ -8,9 +8,14 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface PayslipRepository extends JpaRepository<Payslip, Long> {
+    @EntityGraph(attributePaths = {"employee", "employee.user", "payrollRun", "lineItems"})
+    @Query("select payslip from Payslip payslip where payslip.id = :id")
+    Optional<Payslip> findForDownload(@Param("id") Long id);
+
     @EntityGraph(attributePaths = {"employee", "payrollRun", "lineItems"})
     List<Payslip> findByPayrollRunIdOrderByIdAsc(Long payrollRunId);
 

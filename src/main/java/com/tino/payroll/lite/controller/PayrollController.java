@@ -51,6 +51,13 @@ public class PayrollController {
     public ResponseEntity<PayrollRunResponse> processPayrollRun(@PathVariable Long id) {
         return ResponseEntity.ok(payrollService.processPayrollRun(id));
     }
+    // -----------------------------------------------------
+    // PREVIEW A DRAFT WITHOUT SAVING PAYSLIPS
+    // ----------------------------------------------------
+    @GetMapping("/{id}/preview")
+    public ResponseEntity<List<PayslipResponse>> previewPayrollRun(@PathVariable Long id) {
+        return ResponseEntity.ok(payrollService.previewPayrollRun(id));
+    }
    // -----------------------------------------------------
     // GET PAYSLIPS
     // ----------------------------------------------------

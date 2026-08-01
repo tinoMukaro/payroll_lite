@@ -1,14 +1,17 @@
 # Payroll Lite API
- 
+
+**Release:** `1.0.0` | **Status:** V1 feature-complete for learning, demonstration, and local development
+
 Payroll Lite API is a RESTful payroll-management backend built with Spring Boot and PostgreSQL. It currently supports account authentication, role-based access, employee records, multi-currency payroll runs, Zimbabwe-style NSSA and PAYE calculation, one-off and fixed recurring pay items, and employee self-service payslips.
 
 This repository is an active learning project, but its structure and documentation are intended to be understandable to both junior and senior developers.
 
-> **Project status:** Active development. NSSA, progressive PAYE, one-off adjustments, and effective-dated fixed recurring earnings/deductions are implemented. Employee-specific tax credits are planned.
+> **Project status:** Payroll Lite V1.0.0 is complete for its defined learning and demonstration scope. Production hardening, jurisdictional certification, and advanced enterprise workflows remain outside V1.
 
 ## Table of contents
 
 - [What the API does](#what-the-api-does)
+- [V1 release scope](#v1-release-scope)
 - [Technology stack](#technology-stack)
 - [Architecture](#architecture)
 - [Domain and business rules](#domain-and-business-rules)
@@ -26,7 +29,7 @@ This repository is an active learning project, but its structure and documentati
 - [Troubleshooting](#troubleshooting)
 - [Known limitations](#known-limitations)
 - [Production checklist](#production-checklist)
-- [Roadmap](#roadmap)
+- [Post-V1 roadmap](#post-v1-roadmap)
 
 ## What the API does
 
@@ -40,6 +43,7 @@ The current API provides:
 - USD and ZWG salary currencies.
 - Effective-dated NSSA rules managed by Admin or HR users.
 - Payroll runs grouped by month, year, and currency.
+- No-save calculation preview for draft payroll runs.
 - NSSA contribution calculation with an earnings ceiling.
 - Effective-dated monthly PAYE tables with progressive bands, tax credits, and AIDS levy calculation.
 - Admin/HR endpoints and UI support for managing PAYE tables without direct database access.
@@ -47,24 +51,42 @@ The current API provides:
 - Fixed recurring employee earnings and deductions with effective dates and active-state management.
 - Immutable salary and statutory snapshots on generated payslips.
 - Employee access to only their own payslips.
+- On-demand PDF payslip downloads for Admin/HR and the owning employee.
 - OpenAPI documentation through Swagger UI.
+
+## V1 release scope
+
+Payroll Lite V1.0.0 delivers a complete small-payroll workflow:
+
+1. Register or create users and link them to employee records.
+2. Manage employee details, status, salary currency, and generated employee numbers.
+3. Configure effective-dated NSSA and progressive PAYE rules without direct database changes.
+4. Configure fixed recurring earnings/deductions and add one-off payroll adjustments.
+5. Preview a draft payroll using the same calculation path as final processing.
+6. Process eligible employees in one transaction and save immutable payslip snapshots.
+7. Let Admin/HR review payslips and let employees access only their own records.
+8. Generate and securely download itemised PDF payslips on demand.
+9. Let Admin users list accounts and change roles from the web application.
+
+Within this boundary, V1 is feature-complete. "Complete" does not mean certified for live statutory filing or production deployment. Review the [known limitations](#known-limitations) and [production checklist](#production-checklist) before using the system beyond learning or demonstration.
 
 ## Technology stack
 
-| Area | Technology |
-|---|---|
-| Language | Java 21 |
-| Framework | Spring Boot 4.1.0 |
-| HTTP | Spring Web MVC |
-| Persistence | Spring Data JPA and Hibernate |
-| Database | PostgreSQL |
-| Security | Spring Security and stateless JWT |
-| JWT library | JJWT 0.12.6 |
-| Validation | Jakarta Bean Validation |
-| API documentation | springdoc-openapi / Swagger UI |
-| Build | Maven Wrapper 3.3.4 / Maven 3.9.16 |
-| Boilerplate reduction | Lombok 1.18.42 |
-| Testing | JUnit and Mockito through Spring Boot test starters |
+| Area                  | Technology                                          |
+| --------------------- | --------------------------------------------------- |
+| Language              | Java 21                                             |
+| Framework             | Spring Boot 4.1.0                                   |
+| HTTP                  | Spring Web MVC                                      |
+| Persistence           | Spring Data JPA and Hibernate                       |
+| Database              | PostgreSQL                                          |
+| Security              | Spring Security and stateless JWT                   |
+| JWT library           | JJWT 0.12.6                                         |
+| PDF generation        | Apache PDFBox 3.0.8                                 |
+| Validation            | Jakarta Bean Validation                             |
+| API documentation     | springdoc-openapi / Swagger UI                      |
+| Build                 | Maven Wrapper 3.3.4 / Maven 3.9.16                  |
+| Boilerplate reduction | Lombok 1.18.42                                      |
+| Testing               | JUnit and Mockito through Spring Boot test starters |
 
 ## Architecture
 
@@ -182,6 +204,7 @@ net salary           = gross salary - total deductions
 
 Important processing behavior:
 
+- Preview uses the same calculation path as processing but does not save payslips or change run status.
 - A processed run cannot be processed again.
 - Adjustments can only be added or removed while the run is `DRAFT`.
 - An adjustment employee must be active and use the same currency as the run.
@@ -305,54 +328,52 @@ The API starts at:
 
 ```bash
 ./mvnw clean package
-java -jar target/payroll.lite-0.0.1-SNAPSHOT.jar
+java -jar target/payroll.lite-1.0.0.jar
 ```
 
 ## Configuration
 
-| Property | Environment variable | Development default | Purpose |
-|---|---|---|---|
-| `server.port` | `SERVER_PORT` | `9090` | HTTP port |
-| `spring.datasource.url` | `SPRING_DATASOURCE_URL` | Local `payroll_lite` PostgreSQL database | JDBC connection |
-| `spring.datasource.username` | `SPRING_DATASOURCE_USERNAME` | `postgres` | Database user |
-| `spring.datasource.password` | `SPRING_DATASOURCE_PASSWORD` | Local-only value in properties | Database password |
-| `spring.jpa.hibernate.ddl-auto` | `SPRING_JPA_HIBERNATE_DDL_AUTO` | `update` | Development schema synchronization |
-| `spring.jpa.show-sql` | `SPRING_JPA_SHOW_SQL` | `true` | Log generated SQL |
-| `jwt.secret` | `JWT_SECRET` | Development placeholder | HMAC signing key |
-| `jwt.expiration` | `JWT_EXPIRATION` | `86400000` | Token lifetime in milliseconds |
+| Property                         | Environment variable            | Development default                      | Purpose                                       |
+| -------------------------------- | ------------------------------- | ---------------------------------------- | --------------------------------------------- |
+| `server.port`                    | `SERVER_PORT`                   | `9090`                                   | HTTP port                                     |
+| `spring.datasource.url`          | `SPRING_DATASOURCE_URL`         | Local `payroll_lite` PostgreSQL database | JDBC connection                               |
+| `spring.datasource.username`     | `SPRING_DATASOURCE_USERNAME`    | `postgres`                               | Database user                                 |
+| `spring.datasource.password`     | `SPRING_DATASOURCE_PASSWORD`    | Local-only value in properties           | Database password                             |
+| `spring.jpa.hibernate.ddl-auto`  | `SPRING_JPA_HIBERNATE_DDL_AUTO` | `update`                                 | Development schema synchronization            |
+| `spring.jpa.show-sql`            | `SPRING_JPA_SHOW_SQL`           | `true`                                   | Log generated SQL                             |
+| `jwt.secret`                     | `JWT_SECRET`                    | Development placeholder                  | HMAC signing key                              |
+| `jwt.expiration`                 | `JWT_EXPIRATION`                | `86400000`                               | Token lifetime in milliseconds                |
+| `app.bootstrap-admin.enabled`    | `BOOTSTRAP_ADMIN_ENABLED`       | `false`                                  | Enable the one-time initial Admin bootstrap   |
+| `app.bootstrap-admin.email`      | `BOOTSTRAP_ADMIN_EMAIL`         | Empty                                    | Email for the initial Admin                   |
+| `app.bootstrap-admin.password`   | `BOOTSTRAP_ADMIN_PASSWORD`      | Empty                                    | Initial Admin password; minimum 12 characters |
+| `app.bootstrap-admin.first-name` | `BOOTSTRAP_ADMIN_FIRST_NAME`    | `System`                                 | Initial Admin first name                      |
+| `app.bootstrap-admin.last-name`  | `BOOTSTRAP_ADMIN_LAST_NAME`     | `Administrator`                          | Initial Admin last name                       |
 
 > The credentials and JWT key in `application.properties` are development values. Override them locally and never deploy them to a shared or production environment.
 
 ## Bootstrap the first administrator
 
-Public registration deliberately creates only `EMPLOYEE` accounts. A fresh database currently has no automated first-admin seed, and the role-management endpoint already requires an Admin.
+Public registration deliberately creates only `EMPLOYEE` accounts. To avoid editing the database directly, the API provides an opt-in startup bootstrap for the first `ADMIN` account.
 
-For a new **development database only**:
+Set the bootstrap environment variables before the first startup. In PowerShell:
 
-1. Register the first account:
-
-```bash
-curl -X POST http://localhost:9090/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "firstName": "System",
-    "lastName": "Administrator",
-    "email": "admin@example.com",
-    "password": "change-me-now"
-  }'
+```powershell
+$env:BOOTSTRAP_ADMIN_ENABLED="true"
+$env:BOOTSTRAP_ADMIN_EMAIL="admin@example.com"
+$env:BOOTSTRAP_ADMIN_PASSWORD="replace-with-a-strong-password"
+./mvnw spring-boot:run
 ```
 
-2. Promote that account once in PostgreSQL:
+On startup, the API behaves as follows:
 
-```sql
-UPDATE users
-SET role = 'ADMIN'
-WHERE email = 'admin@example.com';
-```
+- If an Admin already exists, bootstrap does nothing.
+- If no Admin exists but the configured email belongs to an existing account, that account is promoted and enabled.
+- If neither exists, a new enabled Admin account is created with a BCrypt password hash.
+- Missing configuration or a password shorter than 12 characters stops startup with a clear error.
 
-3. Log in as the administrator. From then on, use `PATCH /api/users/{id}/role` to manage roles.
+After the account has been created, set `BOOTSTRAP_ADMIN_ENABLED=false` or remove the bootstrap variables. The account remains in the database. Log in through the web application, open **Users**, select the required role, and press **Save**. The same operation is available through `PATCH /api/users/{id}/role`.
 
-Do not make public registration capable of assigning privileged roles.
+The API refuses to demote the last remaining Admin.
 
 ## Authentication and authorization
 
@@ -394,17 +415,17 @@ The default token lifetime is 24 hours. JWT claims include the email subject, ro
 
 ### Role matrix
 
-| Capability | ADMIN | HR | EMPLOYEE |
-|---|:---:|:---:|:---:|
-| Register and log in | Yes | Yes | Yes |
-| View own session and payslips | Yes | Yes | Yes |
-| Manage employees | Yes | Yes | No |
-| Manage recurring and one-off pay items | Yes | Yes | No |
-| Manage payroll runs | Yes | Yes | No |
-| Manage NSSA rules | Yes | Yes | No |
-| Manage PAYE tables | Yes | Yes | No |
-| List users | Yes | No | No |
-| Change user roles | Yes | No | No |
+| Capability                             | ADMIN | HR  | EMPLOYEE |
+| -------------------------------------- | :---: | :-: | :------: |
+| Register and log in                    |  Yes  | Yes |   Yes    |
+| View own session and payslips          |  Yes  | Yes |   Yes    |
+| Manage employees                       |  Yes  | Yes |    No    |
+| Manage recurring and one-off pay items |  Yes  | Yes |    No    |
+| Manage payroll runs                    |  Yes  | Yes |    No    |
+| Manage NSSA rules                      |  Yes  | Yes |    No    |
+| Manage PAYE tables                     |  Yes  | Yes |    No    |
+| List users                             |  Yes  | No  |    No    |
+| Change user roles                      |  Yes  | No  |    No    |
 
 CORS currently permits browser clients at `http://localhost:5173` and `http://127.0.0.1:5173`.
 
@@ -414,78 +435,82 @@ All request and response bodies use JSON unless otherwise stated.
 
 ### Authentication
 
-| Method | Endpoint | Access | Success |
-|---|---|---|---|
-| `POST` | `/api/auth/register` | Public | `201 Created` |
-| `POST` | `/api/auth/login` | Public | `200 OK` |
-| `GET` | `/api/auth/me` | Authenticated | `200 OK` |
+| Method | Endpoint             | Access        | Success       |
+| ------ | -------------------- | ------------- | ------------- |
+| `POST` | `/api/auth/register` | Public        | `201 Created` |
+| `POST` | `/api/auth/login`    | Public        | `200 OK`      |
+| `GET`  | `/api/auth/me`       | Authenticated | `200 OK`      |
 
 ### Employees
 
-| Method | Endpoint | Access | Success |
-|---|---|---|---|
-| `POST` | `/api/employees` | Admin, HR | `201 Created` |
-| `GET` | `/api/employees` | Admin, HR | `200 OK` |
-| `GET` | `/api/employees/{id}` | Admin, HR | `200 OK` |
-| `PUT` | `/api/employees/{id}` | Admin, HR | `200 OK` |
-| `DELETE` | `/api/employees/{id}` | Admin, HR | `204 No Content` |
-| `GET` | `/api/employees/{id}/recurring-pay-items` | Admin, HR | `200 OK` |
-| `POST` | `/api/employees/{id}/recurring-pay-items` | Admin, HR | `201 Created` |
-| `PUT` | `/api/employees/{id}/recurring-pay-items/{payItemId}` | Admin, HR | `200 OK` |
+| Method   | Endpoint                                              | Access    | Success          |
+| -------- | ----------------------------------------------------- | --------- | ---------------- |
+| `POST`   | `/api/employees`                                      | Admin, HR | `201 Created`    |
+| `GET`    | `/api/employees`                                      | Admin, HR | `200 OK`         |
+| `GET`    | `/api/employees/{id}`                                 | Admin, HR | `200 OK`         |
+| `PUT`    | `/api/employees/{id}`                                 | Admin, HR | `200 OK`         |
+| `DELETE` | `/api/employees/{id}`                                 | Admin, HR | `204 No Content` |
+| `GET`    | `/api/employees/{id}/recurring-pay-items`             | Admin, HR | `200 OK`         |
+| `POST`   | `/api/employees/{id}/recurring-pay-items`             | Admin, HR | `201 Created`    |
+| `PUT`    | `/api/employees/{id}/recurring-pay-items/{payItemId}` | Admin, HR | `200 OK`         |
 
 > Employee deletion is currently a **physical delete**, not a soft delete. Existing foreign-key relationships, such as payslips, may prevent deletion.
 
 ### Payroll runs and payslips
 
-| Method | Endpoint | Access | Success |
-|---|---|---|---|
-| `POST` | `/api/payroll-runs` | Admin, HR | `201 Created` |
-| `GET` | `/api/payroll-runs` | Admin, HR | `200 OK` |
-| `GET` | `/api/payroll-runs/{id}` | Admin, HR | `200 OK` |
-| `POST` | `/api/payroll-runs/{id}/process` | Admin, HR | `200 OK` |
-| `GET` | `/api/payroll-runs/{id}/payslips` | Admin, HR | `200 OK` |
-| `GET` | `/api/payroll-runs/{id}/adjustments` | Admin, HR | `200 OK` |
-| `POST` | `/api/payroll-runs/{id}/adjustments` | Admin, HR | `201 Created` |
-| `DELETE` | `/api/payroll-runs/{id}/adjustments/{adjustmentId}` | Admin, HR | `204 No Content` |
-| `GET` | `/api/payslips/me` | Authenticated | `200 OK` |
+| Method   | Endpoint                                            | Access                     | Success          |
+| -------- | --------------------------------------------------- | -------------------------- | ---------------- |
+| `POST`   | `/api/payroll-runs`                                 | Admin, HR                  | `201 Created`    |
+| `GET`    | `/api/payroll-runs`                                 | Admin, HR                  | `200 OK`         |
+| `GET`    | `/api/payroll-runs/{id}`                            | Admin, HR                  | `200 OK`         |
+| `POST`   | `/api/payroll-runs/{id}/process`                    | Admin, HR                  | `200 OK`         |
+| `GET`    | `/api/payroll-runs/{id}/preview`                    | Admin, HR                  | `200 OK`         |
+| `GET`    | `/api/payroll-runs/{id}/payslips`                   | Admin, HR                  | `200 OK`         |
+| `GET`    | `/api/payroll-runs/{id}/adjustments`                | Admin, HR                  | `200 OK`         |
+| `POST`   | `/api/payroll-runs/{id}/adjustments`                | Admin, HR                  | `201 Created`    |
+| `DELETE` | `/api/payroll-runs/{id}/adjustments/{adjustmentId}` | Admin, HR                  | `204 No Content` |
+| `GET`    | `/api/payslips/me`                                  | Authenticated              | `200 OK`         |
+| `GET`    | `/api/payslips/{id}/pdf`                            | Admin, HR, owning employee | `200 OK` PDF     |
 
 `GET /api/payslips/me` derives the user ID from the authenticated principal. A caller cannot supply another employee or user ID.
 
+PDFs are generated on demand from the immutable payslip snapshot and are not stored in the database. Employees receive `403 Forbidden` if they request a payslip that is not linked to their own user account.
+
 ### NSSA rules
 
-| Method | Endpoint | Access | Success |
-|---|---|---|---|
-| `GET` | `/api/nssa-rules` | Admin, HR | `200 OK` |
-| `POST` | `/api/nssa-rules` | Admin, HR | `201 Created` |
-| `PUT` | `/api/nssa-rules/{id}` | Admin, HR | `200 OK` |
+| Method | Endpoint               | Access    | Success       |
+| ------ | ---------------------- | --------- | ------------- |
+| `GET`  | `/api/nssa-rules`      | Admin, HR | `200 OK`      |
+| `POST` | `/api/nssa-rules`      | Admin, HR | `201 Created` |
+| `PUT`  | `/api/nssa-rules/{id}` | Admin, HR | `200 OK`      |
 
 There is no delete endpoint. Set `active` to `false` through the update endpoint to prevent a rule from being selected.
 
 ### PAYE tax tables
 
-| Method | Endpoint | Access | Success |
-|---|---|---|---|
-| `GET` | `/api/paye-tax-tables` | Admin, HR | `200 OK` |
-| `POST` | `/api/paye-tax-tables` | Admin, HR | `201 Created` |
-| `PUT` | `/api/paye-tax-tables/{id}` | Admin, HR | `200 OK` |
+| Method | Endpoint                    | Access    | Success       |
+| ------ | --------------------------- | --------- | ------------- |
+| `GET`  | `/api/paye-tax-tables`      | Admin, HR | `200 OK`      |
+| `POST` | `/api/paye-tax-tables`      | Admin, HR | `201 Created` |
+| `PUT`  | `/api/paye-tax-tables/{id}` | Admin, HR | `200 OK`      |
 
 PAYE bands use decimal rates, begin at zero, must be contiguous, and require one final open-ended band. Set `active` to `false` to retire a table without deleting it.
 
 ### Users
 
-| Method | Endpoint | Access | Success |
-|---|---|---|---|
-| `GET` | `/api/users` | Admin | `200 OK` |
-| `PATCH` | `/api/users/{id}/role` | Admin | `200 OK` |
+| Method  | Endpoint               | Access | Success  |
+| ------- | ---------------------- | ------ | -------- |
+| `GET`   | `/api/users`           | Admin  | `200 OK` |
+| `PATCH` | `/api/users/{id}/role` | Admin  | `200 OK` |
 
 ### Supported enum values
 
-| Type | Values |
-|---|---|
-| Role | `ADMIN`, `HR`, `EMPLOYEE` |
-| Currency | `USD`, `ZWG` |
+| Type            | Values                                          |
+| --------------- | ----------------------------------------------- |
+| Role            | `ADMIN`, `HR`, `EMPLOYEE`                       |
+| Currency        | `USD`, `ZWG`                                    |
 | Employee status | `ACTIVE`, `ON_LEAVE`, `SUSPENDED`, `TERMINATED` |
-| Payroll status | `DRAFT`, `PROCESSED`, `CANCELLED` |
+| Payroll status  | `DRAFT`, `PROCESSED`, `CANCELLED`               |
 
 ## Common request examples
 
@@ -550,20 +575,35 @@ curl -X POST http://localhost:9090/api/payroll-runs \
   }'
 ```
 
-Process run `1`:
+Preview run `1` without saving anything:
+
+```bash
+curl http://localhost:9090/api/payroll-runs/1/preview \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Process run `1` after reviewing the preview:
 
 ```bash
 curl -X POST http://localhost:9090/api/payroll-runs/1/process \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Processing is a final state in the current API, so review the period, currency, employee salaries, and NSSA configuration first.
+Processing is a final state in the current API, so use the preview before processing.
 
 ### View the authenticated user's payslips
 
 ```bash
 curl http://localhost:9090/api/payslips/me \
   -H "Authorization: Bearer $TOKEN"
+```
+
+Download payslip `20` as a PDF:
+
+```bash
+curl http://localhost:9090/api/payslips/20/pdf \
+  -H "Authorization: Bearer $TOKEN" \
+  --output Payslip.pdf
 ```
 
 ### Change a user's role
@@ -577,17 +617,17 @@ curl -X PATCH http://localhost:9090/api/users/2/role \
 
 ### Request field summary
 
-| Request | Required fields |
-|---|---|
-| Registration | `firstName`, `lastName`, valid `email`, `password` of at least 8 characters |
-| Login | Valid `email`, `password` |
-| Employee create/update | `firstName`, `lastName`, valid `email`, `jobTitle`, positive `basicSalary`, `salaryCurrency`, present/past `hireDate`; `status` is optional |
-| Payroll-run create | `month` from 1-12, `year` of at least 2000, `currency` |
-| NSSA rule create/update | Unique `version`, `currency`, `effectiveFrom`, decimal rates from 0-1, positive ceiling, `active`; `effectiveTo` is optional |
-| PAYE table create/update | Unique `version`, `currency`, effective dates, decimal AIDS levy, `active`, and contiguous progressive `bands` ending open-ended |
-| Payroll adjustment create | Eligible `employeeId`, `EARNING` or `DEDUCTION`, description, positive amount with at most two decimals, and optional taxable flag for earnings |
+| Request                          | Required fields                                                                                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Registration                     | `firstName`, `lastName`, valid `email`, `password` of at least 8 characters                                                                                         |
+| Login                            | Valid `email`, `password`                                                                                                                                           |
+| Employee create/update           | `firstName`, `lastName`, valid `email`, `jobTitle`, positive `basicSalary`, `salaryCurrency`, present/past `hireDate`; `status` is optional                         |
+| Payroll-run create               | `month` from 1-12, `year` of at least 2000, `currency`                                                                                                              |
+| NSSA rule create/update          | Unique `version`, `currency`, `effectiveFrom`, decimal rates from 0-1, positive ceiling, `active`; `effectiveTo` is optional                                        |
+| PAYE table create/update         | Unique `version`, `currency`, effective dates, decimal AIDS levy, `active`, and contiguous progressive `bands` ending open-ended                                    |
+| Payroll adjustment create        | Eligible `employeeId`, `EARNING` or `DEDUCTION`, description, positive amount with at most two decimals, and optional taxable flag for earnings                     |
 | Recurring pay item create/update | `EARNING` or `DEDUCTION`, description, fixed positive amount, effective-from date, optional effective-to date, active state, and optional taxable flag for earnings |
-| Role update | `role` |
+| Role update                      | `role`                                                                                                                                                              |
 
 ## Errors and status codes
 
@@ -603,15 +643,15 @@ Domain errors use this shape:
 }
 ```
 
-| Status | Typical meaning |
-|---|---|
-| `400 Bad Request` | Invalid login, duplicate email, invalid argument, or malformed input |
-| `401 Unauthorized` | Missing, expired, or invalid authentication |
-| `403 Forbidden` | Authenticated user lacks the required role |
-| `404 Not Found` | Employee, payroll run, or NSSA rule does not exist |
-| `409 Conflict` | Duplicate payroll period or invalid payroll-run state |
-| `422 Unprocessable Entity` | Missing, duplicate, overlapping, or date-invalid NSSA/PAYE configuration |
-| `500 Internal Server Error` | Unexpected or currently unhandled server failure |
+| Status                      | Typical meaning                                                          |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `400 Bad Request`           | Invalid login, duplicate email, invalid argument, or malformed input     |
+| `401 Unauthorized`          | Missing, expired, or invalid authentication                              |
+| `403 Forbidden`             | Authenticated user lacks the required role                               |
+| `404 Not Found`             | Employee, payroll run, or NSSA rule does not exist                       |
+| `409 Conflict`              | Duplicate payroll period or invalid payroll-run state                    |
+| `422 Unprocessable Entity`  | Missing, duplicate, overlapping, or date-invalid NSSA/PAYE configuration |
+| `500 Internal Server Error` | Unexpected or currently unhandled server failure                         |
 
 Custom domain exceptions use the response above. Bean-validation errors and Spring Security errors currently use Spring's default response formats.
 
@@ -619,18 +659,18 @@ Custom domain exceptions use the response above. Bean-validation errors and Spri
 
 Primary tables:
 
-| Table | Purpose |
-|---|---|
-| `users` | Login identity, password hash, role, and enabled state |
-| `employees` | Employment details and optional one-to-one user link |
-| `nssa_rules` | Effective-dated statutory rates and ceilings |
-| `paye_tax_tables` | Effective-dated PAYE table headers and AIDS levy rates |
-| `paye_tax_bands` | Ordered progressive bands belonging to a PAYE table |
-| `payroll_runs` | Monthly payroll lifecycle by currency |
-| `payroll_adjustments` | Editable one-off inputs belonging to a draft run and employee |
-| `recurring_pay_items` | Effective-dated fixed earning/deduction templates belonging to employees |
-| `payslips` | Employee salary, deduction, and rule snapshots |
-| `payslip_line_items` | Immutable earning/deduction lines with one-off or recurring source copied during payroll processing |
+| Table                 | Purpose                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| `users`               | Login identity, password hash, role, and enabled state                                              |
+| `employees`           | Employment details and optional one-to-one user link                                                |
+| `nssa_rules`          | Effective-dated statutory rates and ceilings                                                        |
+| `paye_tax_tables`     | Effective-dated PAYE table headers and AIDS levy rates                                              |
+| `paye_tax_bands`      | Ordered progressive bands belonging to a PAYE table                                                 |
+| `payroll_runs`        | Monthly payroll lifecycle by currency                                                               |
+| `payroll_adjustments` | Editable one-off inputs belonging to a draft run and employee                                       |
+| `recurring_pay_items` | Effective-dated fixed earning/deduction templates belonging to employees                            |
+| `payslips`            | Employee salary, deduction, and rule snapshots                                                      |
+| `payslip_line_items`  | Immutable earning/deduction lines with one-off or recurring source copied during payroll processing |
 
 Important database constraints include:
 
@@ -677,9 +717,11 @@ The current suite covers:
 - Progressive PAYE bands, boundaries, credits, AIDS levy, and invalid-table rejection.
 - Effective-dated PAYE table resolution.
 - Payroll state transitions and transactional failure.
+- Payroll preview parity without persistence.
 - Draft adjustment validation, taxable earning calculations, and immutable payslip line snapshots.
 - Recurring item date selection, updates/deactivation, and automatic payroll inclusion.
 - Employee self-service payslip isolation.
+- PDF content generation and employee download authorization.
 - Application-context startup.
 
 `ApplicationTests.contextLoads` uses the configured PostgreSQL datasource. Start PostgreSQL and create `payroll_lite` before running the complete suite.
@@ -737,14 +779,14 @@ Deletion is physical. PostgreSQL may reject it when the employee is referenced b
 
 The API uses dedicated response DTOs rather than returning JPA entities directly.
 
-| Response | Fields |
-|---|---|
-| `UserResponse` | `id`, `firstName`, `lastName`, `email`, `role`, `enabled`, `employeeId` |
-| `AuthResponse` | `token`, `user` |
-| `EmployeeResponse` | `id`, `employeeNumber`, names, `email`, `jobTitle`, `basicSalary`, `salaryCurrency`, `hireDate`, `status`, `userId`, `accountLinked` |
-| `PayrollRunResponse` | `id`, `month`, `year`, `currency`, `status`, `createdAt`, `processedAt` |
-| `NssaRuleResponse` | `id`, `version`, `currency`, effective dates, both rates, ceiling, `active` |
-| `PayslipResponse` | Employee/run identity, period, currency, salary snapshots, NSSA/PAYE breakdown, adjustment lines, deductions, net salary, `createdAt` |
+| Response             | Fields                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `UserResponse`       | `id`, `firstName`, `lastName`, `email`, `role`, `enabled`, `employeeId`                                                               |
+| `AuthResponse`       | `token`, `user`                                                                                                                       |
+| `EmployeeResponse`   | `id`, `employeeNumber`, names, `email`, `jobTitle`, `basicSalary`, `salaryCurrency`, `hireDate`, `status`, `userId`, `accountLinked`  |
+| `PayrollRunResponse` | `id`, `month`, `year`, `currency`, `status`, `createdAt`, `processedAt`                                                               |
+| `NssaRuleResponse`   | `id`, `version`, `currency`, effective dates, both rates, ceiling, `active`                                                           |
+| `PayslipResponse`    | Employee/run identity, period, currency, salary snapshots, NSSA/PAYE breakdown, adjustment lines, deductions, net salary, `createdAt` |
 
 A payslip response includes:
 
@@ -765,12 +807,9 @@ A payslip response includes:
 - PAYE currently applies zero employee-specific credits.
 - One-off and fixed recurring items are supported; percentage-based items, balances, installment schedules, and benefit-specific rules are not.
 - NSSA and PAYE are the only statutory calculations currently implemented.
-- Payroll has no review, approval, reversal, or cancellation endpoint.
-- Payslip PDF generation and download are not implemented.
+- Payroll has preview but no multi-user approval, reversal, or cancellation endpoint.
 - Employee deletion is physical rather than soft.
-- A fresh environment requires a one-time development database step to create the first Admin.
-- Updating a nonexistent user role currently reaches a generic server error instead of a dedicated `404`.
-- User-list and role-update responses do not currently populate `employeeId`.
+- Initial Admin bootstrap is environment-driven but does not yet integrate with an external identity provider or secrets manager.
 - Schema changes rely on Hibernate `ddl-auto=update` rather than versioned migrations.
 - NSSA rules remain editable after use, although generated payslips preserve their calculation snapshots.
 - There is no pagination, filtering, or sorting contract on list endpoints.
@@ -798,16 +837,15 @@ Before treating this project as a production payroll system:
 - Add integration, security, and end-to-end tests.
 - Define backup, restore, retention, and privacy controls.
 
-## Roadmap
+## Post-V1 roadmap
 
 Suggested delivery order:
 
 1. Employee-specific exemptions, pensions, and tax credits.
-2. Payroll review and approval workflow.
+2. Optional multi-user payroll approval workflow.
 3. Employer-cost and statutory summary reporting.
-4. Payslip PDF generation and download.
-5. Versioned database migrations and audit history.
-6. Pagination, filtering, and richer OpenAPI documentation.
+4. Versioned database migrations and audit history.
+5. Pagination, filtering, and richer OpenAPI documentation.
 
 ## License
 

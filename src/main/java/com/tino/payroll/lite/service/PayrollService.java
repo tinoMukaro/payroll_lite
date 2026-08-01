@@ -92,12 +92,27 @@ public class PayrollService {
     @Transactional
     public PayrollRunResponse processPayrollRun(Long id) {
         PayrollRun payrollRun = findPayrollRun(id);
+        requireDraft(payrollRun);
 
-        if (payrollRun.getStatus() != PayrollStatus.DRAFT) {
-            throw new InvalidPayrollStateException(
-                    "Only DRAFT payroll runs can be processed. Current status: " + payrollRun.getStatus()
-            );
-        }
+        List<Payslip> payslips = calculatePayslips(payrollRun);
+
+        payslipRepository.saveAll(payslips);
+        payrollRun.setStatus(PayrollStatus.PROCESSED);
+        payrollRun.setProcessedAt(LocalDateTime.now());
+
+        return mapPayrollRun(payrollRunRepository.save(payrollRun));
+    }
+
+    @Transactional(readOnly = true)
+    public List<PayslipResponse> previewPayrollRun(Long id) {
+        PayrollRun payrollRun = findPayrollRun(id);
+        requireDraft(payrollRun);
+        return calculatePayslips(payrollRun).stream()
+                .map(this::mapPayslip)
+                .toList();
+    }
+
+    private List<Payslip> calculatePayslips(PayrollRun payrollRun) {
 
         List<Employee> eligibleEmployees = employeeRepo.findAllByStatusAndSalaryCurrency(
                 EmployeeStatus.ACTIVE,
@@ -117,34 +132,27 @@ public class PayrollService {
                 adjustments, recurringPayItems
         );
 
-        List<Payslip> payslips;
         if (eligibleEmployees.isEmpty()) {
-            payslips = List.of();
-        } else {
-            NssaParameters nssaParameters = nssaRuleResolver.resolve(
-                    payrollRun.getCurrency(),
-                    payrollMonth.atEndOfMonth()
-            );
-            PayeParameters payeParameters = payeTaxTableResolver.resolve(
-                    payrollRun.getCurrency(),
-                    payrollMonth.atEndOfMonth()
-            );
-            payslips = eligibleEmployees.stream()
-                    .map(employee -> createPayslip(
-                            employee,
-                            payrollRun,
-                            nssaParameters,
-                            payeParameters,
-                            payInputsByEmployee.getOrDefault(employee.getId(), Collections.emptyList())
-                    ))
-                    .toList();
+            return List.of();
         }
 
-        payslipRepository.saveAll(payslips);
-        payrollRun.setStatus(PayrollStatus.PROCESSED);
-        payrollRun.setProcessedAt(LocalDateTime.now());
-
-        return mapPayrollRun(payrollRunRepository.save(payrollRun));
+        NssaParameters nssaParameters = nssaRuleResolver.resolve(
+                payrollRun.getCurrency(),
+                payrollMonth.atEndOfMonth()
+        );
+        PayeParameters payeParameters = payeTaxTableResolver.resolve(
+                payrollRun.getCurrency(),
+                payrollMonth.atEndOfMonth()
+        );
+        return eligibleEmployees.stream()
+                .map(employee -> createPayslip(
+                        employee,
+                        payrollRun,
+                        nssaParameters,
+                        payeParameters,
+                        payInputsByEmployee.getOrDefault(employee.getId(), Collections.emptyList())
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -164,6 +172,15 @@ public class PayrollService {
     private PayrollRun findPayrollRun(Long id) {
         return payrollRunRepository.findById(id)
                 .orElseThrow(() -> new PayrollRunNotFoundException("Payroll run not found with ID: " + id));
+    }
+
+    private void requireDraft(PayrollRun payrollRun) {
+        if (payrollRun.getStatus() != PayrollStatus.DRAFT) {
+            throw new InvalidPayrollStateException(
+                    "Only DRAFT payroll runs can be previewed or processed. Current status: "
+                            + payrollRun.getStatus()
+            );
+        }
     }
 
     private Payslip createPayslip(

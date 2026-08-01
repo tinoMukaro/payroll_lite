@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.tino</groupId>
 	<artifactId>payroll.lite</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.0</version>
 	<name/>
 	<description/>
 	<url/>
@@ -41,6 +41,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.8</version>
 		</dependency>
 
 		<dependency>

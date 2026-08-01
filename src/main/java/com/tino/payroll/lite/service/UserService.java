@@ -3,9 +3,14 @@ package com.tino.payroll.lite.service;
 import com.tino.payroll.lite.dto.UpdateUserRoleRequest;
 import com.tino.payroll.lite.dto.UserResponse;
 import com.tino.payroll.lite.entity.User;
+import com.tino.payroll.lite.enums.Role;
+import com.tino.payroll.lite.exception.LastAdministratorException;
+import com.tino.payroll.lite.exception.UserNotFoundException;
+import com.tino.payroll.lite.repository.EmployeeRepo;
 import com.tino.payroll.lite.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -14,11 +19,13 @@ import java.util.List;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final EmployeeRepo employeeRepo;
 
 
     // -----------------------------------------------------
     // GET ALL USERS
     // ----------------------------------------------------
+    @Transactional(readOnly = true)
     public List<UserResponse> getAllUsers(){
         return userRepository.findAll()
                 .stream()
@@ -29,8 +36,20 @@ public class UserService {
     // -----------------------------------------------------
     // UPDATE USER ROLE
     // ----------------------------------------------------
+    @Transactional
     public UserResponse updateUserRole(Long id, UpdateUserRoleRequest request){
         User user = findUserById(id);
+
+        if (user.getRole() == request.getRole()) {
+            return mapToResponse(user);
+        }
+        if (user.getRole() == Role.ADMIN
+                && request.getRole() != Role.ADMIN
+                && userRepository.countByRole(Role.ADMIN) <= 1) {
+            throw new LastAdministratorException(
+                    "The last administrator cannot be assigned a different role"
+            );
+        }
 
         user.setRole(request.getRole());
 
@@ -44,11 +63,7 @@ public class UserService {
     // ----------------------------------------------------
     private User findUserById(Long id) {
         return userRepository.findById(id)
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "User not found with ID: " + id
-                        )
-                );
+                .orElseThrow(() -> new UserNotFoundException("User not found with ID: " + id));
     }
 
     private UserResponse mapToResponse(User user) {
@@ -59,6 +74,9 @@ public class UserService {
                 .email(user.getEmail())
                 .role(user.getRole())
                 .enabled(user.isEnabled())
+                .employeeId(employeeRepo.findByUserId(user.getId())
+                        .map(employee -> employee.getId())
+                        .orElse(null))
                 .build();
     }
 
