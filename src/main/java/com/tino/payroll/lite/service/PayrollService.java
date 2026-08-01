@@ -18,6 +18,10 @@ import com.tino.payroll.lite.service.calculation.NssaCalculation;
 import com.tino.payroll.lite.service.calculation.NssaCalculator;
 import com.tino.payroll.lite.service.calculation.NssaParameters;
 import com.tino.payroll.lite.service.calculation.NssaRuleResolver;
+import com.tino.payroll.lite.service.calculation.PayeCalculation;
+import com.tino.payroll.lite.service.calculation.PayeCalculator;
+import com.tino.payroll.lite.service.calculation.PayeParameters;
+import com.tino.payroll.lite.service.calculation.PayeTaxTableResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +40,8 @@ public class PayrollService {
     private final EmployeeRepo employeeRepo;
     private final NssaRuleResolver nssaRuleResolver;
     private final NssaCalculator nssaCalculator;
+    private final PayeTaxTableResolver payeTaxTableResolver;
+    private final PayeCalculator payeCalculator;
 
     @Transactional
     public PayrollRunResponse createPayrollRun(CreatePayrollRunRequest request) {
@@ -89,8 +95,14 @@ public class PayrollService {
                     payrollRun.getCurrency(),
                     YearMonth.of(payrollRun.getYear(), payrollRun.getMonth()).atEndOfMonth()
             );
+            PayeParameters payeParameters = payeTaxTableResolver.resolve(
+                    payrollRun.getCurrency(),
+                    YearMonth.of(payrollRun.getYear(), payrollRun.getMonth()).atEndOfMonth()
+            );
             payslips = eligibleEmployees.stream()
-                    .map(employee -> createPayslip(employee, payrollRun, nssaParameters))
+                    .map(employee -> createPayslip(
+                            employee, payrollRun, nssaParameters, payeParameters
+                    ))
                     .toList();
         }
 
@@ -123,15 +135,21 @@ public class PayrollService {
     private Payslip createPayslip(
             Employee employee,
             PayrollRun payrollRun,
-            NssaParameters nssaParameters
+            NssaParameters nssaParameters,
+            PayeParameters payeParameters
     ) {
         BigDecimal basicSalarySnapshot = employee.getBasicSalary();
         NssaCalculation nssaCalculation = nssaCalculator.calculate(
                 basicSalarySnapshot,
                 nssaParameters
         );
-        BigDecimal payeDeduction = BigDecimal.ZERO;
-        BigDecimal totalDeductions = nssaCalculation.employeeContribution().add(payeDeduction);
+        PayeCalculation payeCalculation = payeCalculator.calculate(
+                basicSalarySnapshot,
+                BigDecimal.ZERO,
+                payeParameters
+        );
+        BigDecimal totalDeductions = nssaCalculation.employeeContribution()
+                .add(payeCalculation.totalPaye());
 
         Payslip payslip = new Payslip();
         payslip.setEmployee(employee);
@@ -143,7 +161,12 @@ public class PayrollService {
         payslip.setEmployeeNssaContribution(nssaCalculation.employeeContribution());
         payslip.setEmployerNssaContribution(nssaCalculation.employerContribution());
         payslip.setNssaRuleVersion(nssaCalculation.ruleVersion());
-        payslip.setPayeDeduction(payeDeduction);
+        payslip.setPayeDeduction(payeCalculation.totalPaye());
+        payslip.setTaxableIncome(payeCalculation.taxableIncome());
+        payslip.setIncomeTaxBeforeCredits(payeCalculation.incomeTaxBeforeCredits());
+        payslip.setTaxCreditsApplied(payeCalculation.taxCreditsApplied());
+        payslip.setAidsLevy(payeCalculation.aidsLevy());
+        payslip.setPayeRuleVersion(payeCalculation.ruleVersion());
         payslip.setTotalDeductions(totalDeductions);
         payslip.setNetSalary(basicSalarySnapshot.subtract(totalDeductions));
         return payslip;
@@ -178,9 +201,24 @@ public class PayrollService {
                 .employerNssaContribution(payslip.getEmployerNssaContribution())
                 .nssaRuleVersion(payslip.getNssaRuleVersion())
                 .payeDeduction(payslip.getPayeDeduction())
+                .taxableIncome(orDefault(payslip.getTaxableIncome(), payslip.getGrossSalary()))
+                .incomeTaxBeforeCredits(orZero(payslip.getIncomeTaxBeforeCredits()))
+                .taxCreditsApplied(orZero(payslip.getTaxCreditsApplied()))
+                .aidsLevy(orZero(payslip.getAidsLevy()))
+                .payeRuleVersion(payslip.getPayeRuleVersion() == null
+                        ? "LEGACY_ZERO"
+                        : payslip.getPayeRuleVersion())
                 .totalDeductions(payslip.getTotalDeductions())
                 .netSalary(payslip.getNetSalary())
                 .createdAt(payslip.getCreatedAt())
                 .build();
+    }
+
+    private BigDecimal orZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private BigDecimal orDefault(BigDecimal value, BigDecimal fallback) {
+        return value == null ? fallback : value;
     }
 }

@@ -17,6 +17,10 @@ import com.tino.payroll.lite.repository.PayslipRepository;
 import com.tino.payroll.lite.service.calculation.NssaCalculator;
 import com.tino.payroll.lite.service.calculation.NssaParameters;
 import com.tino.payroll.lite.service.calculation.NssaRuleResolver;
+import com.tino.payroll.lite.service.calculation.PayeCalculator;
+import com.tino.payroll.lite.service.calculation.PayeParameters;
+import com.tino.payroll.lite.service.calculation.PayeTaxBandParameters;
+import com.tino.payroll.lite.service.calculation.PayeTaxTableResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,17 +47,22 @@ class PayrollServiceTest {
     private EmployeeRepo employeeRepo;
     @Mock
     private NssaRuleResolver nssaRuleResolver;
+    @Mock
+    private PayeTaxTableResolver payeTaxTableResolver;
 
     private NssaCalculator nssaCalculator;
+    private PayeCalculator payeCalculator;
 
     private PayrollService payrollService;
 
     @BeforeEach
     void setUp() {
         nssaCalculator = new NssaCalculator();
+        payeCalculator = new PayeCalculator();
         payrollService = new PayrollService(
                 payrollRunRepository, payslipRepository, employeeRepo,
-                nssaRuleResolver, nssaCalculator
+                nssaRuleResolver, nssaCalculator,
+                payeTaxTableResolver, payeCalculator
         );
     }
 
@@ -86,6 +95,8 @@ class PayrollServiceTest {
         when(employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD)).thenReturn(List.of(employee));
         when(nssaRuleResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
                 .thenReturn(nssaParameters());
+        when(payeTaxTableResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenReturn(payeParameters());
         when(payrollRunRepository.save(any(PayrollRun.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -103,8 +114,14 @@ class PayrollServiceTest {
         assertEquals(new BigDecimal("45.00"), payslip.getEmployeeNssaContribution());
         assertEquals(new BigDecimal("45.00"), payslip.getEmployerNssaContribution());
         assertEquals("TEST-NSSA-USD-2026-07", payslip.getNssaRuleVersion());
-        assertEquals(new BigDecimal("45.00"), payslip.getTotalDeductions());
-        assertEquals(new BigDecimal("1455.00"), payslip.getNetSalary());
+        assertEquals(new BigDecimal("1500.00"), payslip.getTaxableIncome());
+        assertEquals(new BigDecimal("365.00"), payslip.getIncomeTaxBeforeCredits());
+        assertEquals(new BigDecimal("0.00"), payslip.getTaxCreditsApplied());
+        assertEquals(new BigDecimal("10.95"), payslip.getAidsLevy());
+        assertEquals(new BigDecimal("375.95"), payslip.getPayeDeduction());
+        assertEquals("TEST-PAYE-USD-2026", payslip.getPayeRuleVersion());
+        assertEquals(new BigDecimal("420.95"), payslip.getTotalDeductions());
+        assertEquals(new BigDecimal("1079.05"), payslip.getNetSalary());
         assertSame(employee, payslip.getEmployee());
         assertSame(payrollRun, payslip.getPayrollRun());
         assertEquals(PayrollStatus.PROCESSED, payrollRun.getStatus());
@@ -127,7 +144,7 @@ class PayrollServiceTest {
 
         verify(employeeRepo).findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD);
         verify(payslipRepository).saveAll(List.of());
-        verifyNoInteractions(nssaRuleResolver);
+        verifyNoInteractions(nssaRuleResolver, payeTaxTableResolver);
     }
 
     @Test
@@ -148,6 +165,31 @@ class PayrollServiceTest {
                 () -> payrollService.processPayrollRun(1L));
 
         verifyNoInteractions(payslipRepository);
+        verifyNoInteractions(payeTaxTableResolver);
+        verify(payrollRunRepository, never()).save(any(PayrollRun.class));
+        assertEquals(PayrollStatus.DRAFT, payrollRun.getStatus());
+    }
+
+    @Test
+    void missingPayeConfigurationStopsPayrollBeforeAnythingIsSaved() {
+        PayrollRun payrollRun = draftPayrollRun();
+        Employee employee = Employee.builder()
+                .id(10L)
+                .basicSalary(new BigDecimal("1500.00"))
+                .status(EmployeeStatus.ACTIVE)
+                .build();
+        when(payrollRunRepository.findById(1L)).thenReturn(Optional.of(payrollRun));
+        when(employeeRepo.findAllByStatusAndSalaryCurrency(EmployeeStatus.ACTIVE, CurrencyCode.USD))
+                .thenReturn(List.of(employee));
+        when(nssaRuleResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenReturn(nssaParameters());
+        when(payeTaxTableResolver.resolve(CurrencyCode.USD, LocalDate.of(2026, 7, 31)))
+                .thenThrow(new PayrollConfigurationException("No PAYE table configured"));
+
+        assertThrows(PayrollConfigurationException.class,
+                () -> payrollService.processPayrollRun(1L));
+
+        verifyNoInteractions(payslipRepository);
         verify(payrollRunRepository, never()).save(any(PayrollRun.class));
         assertEquals(PayrollStatus.DRAFT, payrollRun.getStatus());
     }
@@ -161,7 +203,10 @@ class PayrollServiceTest {
         assertThrows(InvalidPayrollStateException.class,
                 () -> payrollService.processPayrollRun(1L));
 
-        verifyNoInteractions(employeeRepo, payslipRepository, nssaRuleResolver);
+        verifyNoInteractions(
+                employeeRepo, payslipRepository,
+                nssaRuleResolver, payeTaxTableResolver
+        );
     }
 
     @Test
@@ -205,6 +250,27 @@ class PayrollServiceTest {
                 new BigDecimal("0.045"),
                 new BigDecimal("1000.00"),
                 "TEST-NSSA-USD-2026-07"
+        );
+    }
+    private PayeParameters payeParameters() {
+        return new PayeParameters(
+                "TEST-PAYE-USD-2026",
+                new BigDecimal("0.03"),
+                List.of(
+                        payeBand("0", "100", "0"),
+                        payeBand("100", "300", "0.20"),
+                        payeBand("300", "1000", "0.25"),
+                        payeBand("1000", "2000", "0.30"),
+                        payeBand("2000", "3000", "0.35"),
+                        payeBand("3000", null, "0.40")
+                )
+        );
+    }
+    private PayeTaxBandParameters payeBand(String lower, String upper, String rate) {
+        return new PayeTaxBandParameters(
+                new BigDecimal(lower),
+                upper == null ? null : new BigDecimal(upper),
+                new BigDecimal(rate)
         );
     }
     private CreatePayrollRunRequest request(Integer month, Integer year) {

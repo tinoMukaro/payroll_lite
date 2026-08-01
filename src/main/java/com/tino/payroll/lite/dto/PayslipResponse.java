@@ -26,6 +26,11 @@ public class PayslipResponse {
     private BigDecimal employerNssaContribution;
     private String nssaRuleVersion;
     private BigDecimal payeDeduction;
+    private BigDecimal taxableIncome;
+    private BigDecimal incomeTaxBeforeCredits;
+    private BigDecimal taxCreditsApplied;
+    private BigDecimal aidsLevy;
+    private String payeRuleVersion;
     private BigDecimal totalDeductions;
     private BigDecimal netSalary;
     private LocalDateTime createdAt;

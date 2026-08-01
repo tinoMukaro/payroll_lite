@@ -13,6 +13,13 @@ import java.time.LocalDateTime;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(PayeTaxTableNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePayeTaxTableNotFound(
+            PayeTaxTableNotFoundException exception, HttpServletRequest request
+    ) {
+        return buildError(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
+
     @ExceptionHandler(NssaRuleNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNssaRuleNotFound(
             NssaRuleNotFoundException exception, HttpServletRequest request

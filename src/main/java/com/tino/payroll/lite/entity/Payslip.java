@@ -63,6 +63,22 @@ public class Payslip {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal payeDeduction;
 
+    // Nullable for legacy payslips created before the PAYE breakdown was introduced.
+    @Column(name = "taxable_income", precision = 12, scale = 2)
+    private BigDecimal taxableIncome;
+
+    @Column(name = "income_tax_before_credits", precision = 12, scale = 2)
+    private BigDecimal incomeTaxBeforeCredits;
+
+    @Column(name = "tax_credits_applied", precision = 12, scale = 2)
+    private BigDecimal taxCreditsApplied;
+
+    @Column(name = "aids_levy", precision = 12, scale = 2)
+    private BigDecimal aidsLevy;
+
+    @Column(name = "paye_rule_version", length = 100)
+    private String payeRuleVersion;
+
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal totalDeductions;
 
@@ -78,6 +94,12 @@ public class Payslip {
         if (employeeNssaContribution == null) employeeNssaContribution = BigDecimal.ZERO;
         if (employerNssaContribution == null) employerNssaContribution = BigDecimal.ZERO;
         if (nssaRuleVersion == null) nssaRuleVersion = "NOT_APPLIED";
+        if (payeDeduction == null) payeDeduction = BigDecimal.ZERO;
+        if (taxableIncome == null) taxableIncome = grossSalary;
+        if (incomeTaxBeforeCredits == null) incomeTaxBeforeCredits = BigDecimal.ZERO;
+        if (taxCreditsApplied == null) taxCreditsApplied = BigDecimal.ZERO;
+        if (aidsLevy == null) aidsLevy = BigDecimal.ZERO;
+        if (payeRuleVersion == null) payeRuleVersion = "LEGACY_ZERO";
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }
