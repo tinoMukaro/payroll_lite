@@ -282,27 +282,23 @@ createdb -U postgres payroll_lite
 
 ### 3. Provide local configuration
 
-Spring Boot environment variables override values in `src/main/resources/application.properties`.
+Copy the safe configuration template to the ignored local `.env` file:
 
 PowerShell:
 
 ```powershell
-$env:SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5432/payroll_lite"
-$env:SPRING_DATASOURCE_USERNAME = "postgres"
-$env:SPRING_DATASOURCE_PASSWORD = "your-local-postgres-password"
-$env:JWT_SECRET = "replace-with-a-random-secret-of-at-least-32-bytes"
-$env:JWT_EXPIRATION = "86400000"
+Copy-Item .env.example .env
 ```
 
 Bash:
 
 ```bash
-export SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/payroll_lite"
-export SPRING_DATASOURCE_USERNAME="postgres"
-export SPRING_DATASOURCE_PASSWORD="your-local-postgres-password"
-export JWT_SECRET="replace-with-a-random-secret-of-at-least-32-bytes"
-export JWT_EXPIRATION="86400000"
+cp .env.example .env
 ```
+
+Edit `.env` and provide your PostgreSQL password and a cryptographically random JWT secret of at least 32 bytes. Spring Boot imports this extensionless file as local properties through `spring.config.import`. The real `.env` is ignored by Git; commit only `.env.example`.
+
+Operating-system environment variables with the same names override values loaded from `.env`, which is the recommended approach outside local development.
 
 ### 4. Run the API
 
@@ -333,36 +329,37 @@ java -jar target/payroll.lite-1.0.0.jar
 
 ## Configuration
 
-| Property                         | Environment variable            | Development default                      | Purpose                                       |
-| -------------------------------- | ------------------------------- | ---------------------------------------- | --------------------------------------------- |
-| `server.port`                    | `SERVER_PORT`                   | `9090`                                   | HTTP port                                     |
-| `spring.datasource.url`          | `SPRING_DATASOURCE_URL`         | Local `payroll_lite` PostgreSQL database | JDBC connection                               |
-| `spring.datasource.username`     | `SPRING_DATASOURCE_USERNAME`    | `postgres`                               | Database user                                 |
-| `spring.datasource.password`     | `SPRING_DATASOURCE_PASSWORD`    | Local-only value in properties           | Database password                             |
-| `spring.jpa.hibernate.ddl-auto`  | `SPRING_JPA_HIBERNATE_DDL_AUTO` | `update`                                 | Development schema synchronization            |
-| `spring.jpa.show-sql`            | `SPRING_JPA_SHOW_SQL`           | `true`                                   | Log generated SQL                             |
-| `jwt.secret`                     | `JWT_SECRET`                    | Development placeholder                  | HMAC signing key                              |
-| `jwt.expiration`                 | `JWT_EXPIRATION`                | `86400000`                               | Token lifetime in milliseconds                |
-| `app.bootstrap-admin.enabled`    | `BOOTSTRAP_ADMIN_ENABLED`       | `false`                                  | Enable the one-time initial Admin bootstrap   |
-| `app.bootstrap-admin.email`      | `BOOTSTRAP_ADMIN_EMAIL`         | Empty                                    | Email for the initial Admin                   |
-| `app.bootstrap-admin.password`   | `BOOTSTRAP_ADMIN_PASSWORD`      | Empty                                    | Initial Admin password; minimum 12 characters |
-| `app.bootstrap-admin.first-name` | `BOOTSTRAP_ADMIN_FIRST_NAME`    | `System`                                 | Initial Admin first name                      |
-| `app.bootstrap-admin.last-name`  | `BOOTSTRAP_ADMIN_LAST_NAME`     | `Administrator`                          | Initial Admin last name                       |
+| Property                         | `.env` / environment variable   | Default         | Purpose                                       |
+| -------------------------------- | ------------------------------- | --------------- | --------------------------------------------- |
+| `server.port`                    | `SERVER_PORT`                   | `9090`          | HTTP port                                     |
+| `spring.datasource.url`          | `DB_URL`                        | Required        | JDBC connection                               |
+| `spring.datasource.username`     | `DB_USERNAME`                   | Required        | Database user                                 |
+| `spring.datasource.password`     | `DB_PASSWORD`                   | Required        | Database password                             |
+| `spring.jpa.hibernate.ddl-auto`  | `SPRING_JPA_HIBERNATE_DDL_AUTO` | `update`        | Development schema synchronization            |
+| `spring.jpa.show-sql`            | `SHOW_SQL`                      | `true`          | Log generated SQL                             |
+| `jwt.secret`                     | `JWT_SECRET`                    | Required        | HMAC signing key; minimum 32 bytes            |
+| `jwt.expiration`                 | `JWT_EXPIRATION`                | `86400000`      | Token lifetime in milliseconds                |
+| `app.bootstrap-admin.enabled`    | `BOOTSTRAP_ADMIN_ENABLED`       | `false`         | Enable the one-time initial Admin bootstrap   |
+| `app.bootstrap-admin.email`      | `BOOTSTRAP_ADMIN_EMAIL`         | Empty           | Email for the initial Admin                   |
+| `app.bootstrap-admin.password`   | `BOOTSTRAP_ADMIN_PASSWORD`      | Empty           | Initial Admin password; minimum 12 characters |
+| `app.bootstrap-admin.first-name` | `BOOTSTRAP_ADMIN_FIRST_NAME`    | `System`        | Initial Admin first name                      |
+| `app.bootstrap-admin.last-name`  | `BOOTSTRAP_ADMIN_LAST_NAME`     | `Administrator` | Initial Admin last name                       |
 
-> The credentials and JWT key in `application.properties` are development values. Override them locally and never deploy them to a shared or production environment.
+> `.env` is for local development only. Shared and production environments should inject these values through their environment or secrets-management platform.
 
 ## Bootstrap the first administrator
 
 Public registration deliberately creates only `EMPLOYEE` accounts. To avoid editing the database directly, the API provides an opt-in startup bootstrap for the first `ADMIN` account.
 
-Set the bootstrap environment variables before the first startup. In PowerShell:
+For a fresh installation, edit `.env` before the first startup:
 
-```powershell
-$env:BOOTSTRAP_ADMIN_ENABLED="true"
-$env:BOOTSTRAP_ADMIN_EMAIL="admin@example.com"
-$env:BOOTSTRAP_ADMIN_PASSWORD="replace-with-a-strong-password"
-./mvnw spring-boot:run
+```properties
+BOOTSTRAP_ADMIN_ENABLED=true
+BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_ADMIN_PASSWORD=replace-with-a-strong-password
 ```
+
+Start the API normally after saving the file.
 
 On startup, the API behaves as follows:
 
@@ -371,7 +368,7 @@ On startup, the API behaves as follows:
 - If neither exists, a new enabled Admin account is created with a BCrypt password hash.
 - Missing configuration or a password shorter than 12 characters stops startup with a clear error.
 
-After the account has been created, set `BOOTSTRAP_ADMIN_ENABLED=false` or remove the bootstrap variables. The account remains in the database. Log in through the web application, open **Users**, select the required role, and press **Save**. The same operation is available through `PATCH /api/users/{id}/role`.
+After the account has been created, set `BOOTSTRAP_ADMIN_ENABLED=false` and restart the API. The account remains in the database. Log in through the web application, open **Users**, select the required role, and press **Save**. The same operation is available through `PATCH /api/users/{id}/role`.
 
 The API refuses to demote the last remaining Admin.
 

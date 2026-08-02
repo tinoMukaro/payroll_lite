@@ -12,8 +12,6 @@ target/
 .settings
 .springBeans
 .sts4-cache
-.gitignore
-
 ### IntelliJ IDEA ###
 .idea
 *.iws
@@ -32,3 +30,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+## env
+.env
+.env.*
+!.env.example
