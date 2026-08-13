@@ -77,4 +77,59 @@ class NssaCalculatorTest {
         assertThrows(IllegalArgumentException.class,
                 () -> calculator.calculate(new BigDecimal("500.00"), invalid));
     }
+
+    @Test
+    void zeroEarningProduceZeroContributions(){
+        NssaCalculation result = calculator.calculate
+        (
+            new BigDecimal("0.00"), parameters
+        );
+        assertEquals(new BigDecimal("0.00"), result.employeeContribution());
+        assertEquals(new BigDecimal("0.00"), result.pensionableEarnings());
+        assertEquals(new BigDecimal("0.00"), result.employerContribution());
+    }
+
+    @Test
+    void calculateDifferentEmployeeAndEmployerRates(){
+        NssaParameters differentRates = new NssaParameters(
+            new BigDecimal("0.045"),
+            new BigDecimal("0.020"),
+            new BigDecimal("1000.00"),
+            "DIFFERENT-RATES"
+        );
+        NssaCalculation result = calculator.calculate(
+            new BigDecimal("500.00"),
+            differentRates
+        );
+        assertEquals(new BigDecimal("22.50"),result.employeeContribution());
+        assertEquals(new BigDecimal("10.00"),result.employerContribution());
+    }
+
+    @Test
+    void rejectsMissingEarnings() {
+    IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> calculator.calculate(
+                    null,
+                    parameters
+            )
+    );
+
+    assertEquals(
+            "Pensionable earnings are required",
+            exception.getMessage()
+    );
+}
+
+@Test
+void rejectsMissingParameters(){
+    IllegalArgumentException exception = assertThrows(
+        IllegalArgumentException.class,
+        () -> calculator.calculate(
+            new BigDecimal("500.00"),
+            null
+        )
+    );
+    assertEquals("NSSA parameters are required", exception.getMessage());
+}
 }

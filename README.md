@@ -335,8 +335,9 @@ java -jar target/payroll.lite-1.0.0.jar
 | `spring.datasource.url`          | `DB_URL`                        | Required        | JDBC connection                               |
 | `spring.datasource.username`     | `DB_USERNAME`                   | Required        | Database user                                 |
 | `spring.datasource.password`     | `DB_PASSWORD`                   | Required        | Database password                             |
-| `spring.jpa.hibernate.ddl-auto`  | `SPRING_JPA_HIBERNATE_DDL_AUTO` | `update`        | Development schema synchronization            |
-| `spring.jpa.show-sql`            | `SHOW_SQL`                      | `true`          | Log generated SQL                             |
+| `spring.jpa.hibernate.ddl-auto`  | —                               | `validate`      | Verify mappings; Flyway owns schema changes   |
+| `spring.jpa.show-sql`            | `SHOW_SQL`                      | `false`         | Log generated SQL                             |
+| `spring.flyway.baseline-on-migrate` | `FLYWAY_BASELINE_ON_MIGRATE` | `false`         | One-time adoption of a pre-Flyway database    |
 | `jwt.secret`                     | `JWT_SECRET`                    | Required        | HMAC signing key; minimum 32 bytes            |
 | `jwt.expiration`                 | `JWT_EXPIRATION`                | `86400000`      | Token lifetime in milliseconds                |
 | `app.bootstrap-admin.enabled`    | `BOOTSTRAP_ADMIN_ENABLED`       | `false`         | Enable the one-time initial Admin bootstrap   |
@@ -681,13 +682,55 @@ Important database constraints include:
 - Unique PAYE table version and `currency + effective_from` pair.
 - Unique lower bound within each PAYE table.
 
-The development configuration uses:
+## Database migrations
 
-```properties
-spring.jpa.hibernate.ddl-auto=update
+Flyway is the sole owner of schema creation and changes. Hibernate uses
+`ddl-auto=validate`, so startup fails early if the database and JPA mappings disagree.
+Migration files live in `src/main/resources/db/migration`:
+
+- `V1__initial_schema.sql` creates a complete database from scratch.
+- `V2__harden_constraints_and_indexes.sql` adds domain checks and lookup indexes.
+
+Never edit a migration after it has been committed or applied. Add a new migration,
+for example `V3__add_audit_events.sql`, for every later schema change.
+
+### Fresh database
+
+Keep this setting in `.env`:
+
+```dotenv
+FLYWAY_BASELINE_ON_MIGRATE=false
 ```
 
-This is convenient for local development, but it is not a production migration strategy. Introduce versioned migrations such as Flyway before shared staging or production deployment, then change Hibernate to `validate`.
+Start the API normally. Flyway executes V1, then V2, before Hibernate validates the
+result. The `flyway_schema_history` table records exactly what was applied.
+
+### Existing V1 database created by Hibernate
+
+Back up the database first. Then enable baselining for one startup only:
+
+```dotenv
+FLYWAY_BASELINE_ON_MIGRATE=true
+```
+
+Start the API. Flyway records the existing schema as baseline version 1 and applies
+V2 without recreating tables or deleting data. After startup succeeds, immediately
+restore the safer default:
+
+```dotenv
+FLYWAY_BASELINE_ON_MIGRATE=false
+```
+
+Do not enable baselining for an unknown or partially initialized production database.
+It deliberately tells Flyway to trust the schema that is already present.
+
+Inspect migration status in PostgreSQL with:
+
+```sql
+SELECT installed_rank, version, description, installed_on, success
+FROM flyway_schema_history
+ORDER BY installed_rank;
+```
 
 ## Testing
 
@@ -799,6 +842,10 @@ A payslip response includes:
 - `totalDeductions`.
 - `netSalary`.
 
+The Flyway integration test uses a disposable PostgreSQL 17 Testcontainer to prove
+that every migration succeeds against an empty database. It runs when Docker is
+available and is skipped with an explicit reason when Docker is unavailable.
+
 ## Known limitations
 
 - PAYE currently applies zero employee-specific credits.
@@ -807,7 +854,6 @@ A payslip response includes:
 - Payroll has preview but no multi-user approval, reversal, or cancellation endpoint.
 - Employee deletion is physical rather than soft.
 - Initial Admin bootstrap is environment-driven but does not yet integrate with an external identity provider or secrets manager.
-- Schema changes rely on Hibernate `ddl-auto=update` rather than versioned migrations.
 - NSSA rules remain editable after use, although generated payslips preserve their calculation snapshots.
 - There is no pagination, filtering, or sorting contract on list endpoints.
 - There are no refresh-token, logout, or token-revocation endpoints.
@@ -820,8 +866,6 @@ Before treating this project as a production payroll system:
 
 - Move database credentials and JWT keys to secrets management.
 - Replace the development JWT key with a strong random secret.
-- Set `spring.jpa.hibernate.ddl-auto=validate`.
-- Add versioned database migrations.
 - Disable verbose SQL logging unless explicitly required.
 - Configure CORS for the deployed frontend origin.
 - Add HTTPS and secure reverse-proxy settings.
