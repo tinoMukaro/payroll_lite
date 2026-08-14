@@ -3,6 +3,7 @@ package com.tino.payroll.lite.enums;
 public enum AuditAction {
     ADMIN_BOOTSTRAPPED,
     USER_REGISTERED,
+    INTERNAL_USER_CREATED,
     USER_ROLE_CHANGED,
     EMPLOYEE_CREATED,
     EMPLOYEE_UPDATED,

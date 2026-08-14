@@ -30,7 +30,7 @@ class FlywayMigrationTest {
                     .load();
 
             var result = flyway.migrate();
-            assertEquals(3, result.migrationsExecuted);
+            assertEquals(4, result.migrationsExecuted);
 
             var dataSource = new DriverManagerDataSource(
                     postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword()
@@ -54,14 +54,14 @@ class FlywayMigrationTest {
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success",
                     Integer.class
             );
-            assertEquals(3, successfulMigrations);
+            assertEquals(4, successfulMigrations);
             assertTrue(flyway.validateWithResult().validationSuccessful);
 
             Long auditId = jdbc.queryForObject("""
                     INSERT INTO audit_events (
                         actor_email, action, entity_type, entity_id, details
                     ) VALUES (
-                        'SYSTEM', 'EMPLOYEE_CREATED', 'EMPLOYEE', 42, 'test event'
+                        'SYSTEM', 'INTERNAL_USER_CREATED', 'USER', 42, 'test event'
                     ) RETURNING id
                     """, Long.class);
             org.junit.jupiter.api.Assertions.assertThrows(

@@ -37,6 +37,7 @@ This repository is an active learning project, but its structure and documentati
 The current API provides:
 
 - Public account registration and JWT login.
+- Admin-managed creation of internal HR and Admin accounts.
 - `ADMIN`, `HR`, and `EMPLOYEE` roles.
 - Automatic linking between a user account and an employee record when their normalized email addresses match.
 - Backend-generated employee numbers such as `EMP-000001`.
@@ -68,7 +69,7 @@ Payroll Lite V1.0.0 delivers a complete small-payroll workflow:
 6. Process eligible employees in one transaction and save immutable payslip snapshots.
 7. Let Admin/HR review payslips and let employees access only their own records.
 8. Generate and securely download itemised PDF payslips on demand.
-9. Let Admin users list accounts and change roles from the web application.
+9. Let Admin users create internal accounts, list users, and change roles from the web application.
 
 Within this boundary, V1 is feature-complete. "Complete" does not mean certified for live statutory filing or production deployment. Review the [known limitations](#known-limitations) and [production checklist](#production-checklist) before using the system beyond learning or demonstration.
 
@@ -157,17 +158,20 @@ erDiagram
 - A person may have both records, linked one-to-one through `employees.user_id`.
 - Email is normalized to lowercase and is the matching key used during account harmonization.
 
-The two supported creation paths are:
+The supported creation paths are:
 
 1. **Employee exists first:** HR creates the employee. When that person registers with the same email, registration links the new user to the employee.
 2. **User exists first:** The person registers. When HR later creates an employee with the same email, employee creation links the existing user.
+3. **Internal user:** An Admin creates an HR or Admin account. If an active, unlinked employee has the same email, the account is linked immediately.
 
 On application startup, the harmonization service also links existing unlinked records that share an email.
 
 Additional rules:
 
 - Public registration always creates an enabled `EMPLOYEE` user.
+- Internal-user creation accepts only the `HR` and `ADMIN` roles and is restricted to Admin users.
 - A terminated employee cannot claim a public account.
+- A terminated employee cannot receive an internal account through their employee email.
 - Terminating a linked employee disables their user account.
 - Changing a terminated employee back to another status does not currently re-enable their user account automatically.
 - Updating a linked employee synchronizes the user's first name, last name, and email.
@@ -432,7 +436,7 @@ On startup, the API behaves as follows:
 - If neither exists, a new enabled Admin account is created with a BCrypt password hash.
 - Missing configuration or a password shorter than 12 characters stops startup with a clear error.
 
-After the account has been created, set `BOOTSTRAP_ADMIN_ENABLED=false` and restart the API. The account remains in the database. Log in through the web application, open **Users**, select the required role, and press **Save**. The same operation is available through `PATCH /api/users/{id}/role`.
+After the account has been created, set `BOOTSTRAP_ADMIN_ENABLED=false` and restart the API. The account remains in the database. Log in through the web application and open **Users** to create HR/Admin accounts or change an existing user's role. The same operations are available through `POST /api/users/internal` and `PATCH /api/users/{id}/role`.
 
 The API refuses to demote the last remaining Admin.
 
@@ -486,6 +490,7 @@ The default token lifetime is 24 hours. JWT claims include the email subject, ro
 | Manage NSSA rules                      |  Yes  | Yes |    No    |
 | Manage PAYE tables                     |  Yes  | Yes |    No    |
 | List users                             |  Yes  | No  |    No    |
+| Create internal HR/Admin users         |  Yes  | No  |    No    |
 | Change user roles                      |  Yes  | No  |    No    |
 
 CORS currently permits browser clients at `http://localhost:5173` and `http://127.0.0.1:5173`.
@@ -559,10 +564,11 @@ PAYE bands use decimal rates, begin at zero, must be contiguous, and require one
 
 ### Users
 
-| Method  | Endpoint               | Access | Success  |
-| ------- | ---------------------- | ------ | -------- |
-| `GET`   | `/api/users`           | Admin  | `200 OK` |
-| `PATCH` | `/api/users/{id}/role` | Admin  | `200 OK` |
+| Method  | Endpoint               | Access | Success       |
+| ------- | ---------------------- | ------ | ------------- |
+| `GET`   | `/api/users`           | Admin  | `200 OK`      |
+| `POST`  | `/api/users/internal`  | Admin  | `201 Created` |
+| `PATCH` | `/api/users/{id}/role` | Admin  | `200 OK`      |
 
 ### Audit events
 
@@ -585,7 +591,7 @@ limited to 100 records.
 | Audit entity    | `USER`, `EMPLOYEE`, `NSSA_RULE`, `PAYE_TABLE`, `RECURRING_PAY_ITEM`, `PAYROLL_RUN`, `PAYROLL_ADJUSTMENT`, `PAYSLIP` |
 
 Audit action values are `ADMIN_BOOTSTRAPPED`, `USER_REGISTERED`,
-`USER_ROLE_CHANGED`, `EMPLOYEE_CREATED`, `EMPLOYEE_UPDATED`, `EMPLOYEE_DELETED`,
+`INTERNAL_USER_CREATED`, `USER_ROLE_CHANGED`, `EMPLOYEE_CREATED`, `EMPLOYEE_UPDATED`, `EMPLOYEE_DELETED`,
 `NSSA_RULE_CREATED`, `NSSA_RULE_UPDATED`, `PAYE_TABLE_CREATED`, `PAYE_TABLE_UPDATED`,
 `RECURRING_PAY_ITEM_CREATED`, `RECURRING_PAY_ITEM_UPDATED`, `PAYROLL_RUN_CREATED`,
 `PAYROLL_RUN_PROCESSED`, `PAYROLL_ADJUSTMENT_CREATED`,
@@ -685,6 +691,17 @@ curl http://localhost:9090/api/payslips/20/pdf \
   --output Payslip.pdf
 ```
 
+### Create an internal user
+
+```bash
+curl -X POST http://localhost:9090/api/users/internal \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"firstName":"Jane","lastName":"Moyo","email":"jane@example.com","password":"Initial123","role":"HR"}'
+```
+
+Only `HR` and `ADMIN` are accepted by this endpoint.
+
 ### Change a user's role
 
 ```bash
@@ -699,6 +716,7 @@ curl -X PATCH http://localhost:9090/api/users/2/role \
 | Request                          | Required fields                                                                                                                                                     |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Registration                     | `firstName`, `lastName`, valid `email`, `password` of at least 8 characters                                                                                         |
+| Internal user create             | `firstName`, `lastName`, valid unique `email`, initial `password` of at least 8 characters, `HR` or `ADMIN` role                                                    |
 | Login                            | Valid `email`, `password`                                                                                                                                           |
 | Employee create/update           | `firstName`, `lastName`, valid `email`, `jobTitle`, positive `basicSalary`, `salaryCurrency`, present/past `hireDate`; `status` is optional                         |
 | Payroll-run create               | `month` from 1-12, `year` of at least 2000, `currency`                                                                                                              |
@@ -772,6 +790,7 @@ Migration files live in `src/main/resources/db/migration`:
 - `V1__initial_schema.sql` creates a complete database from scratch.
 - `V2__harden_constraints_and_indexes.sql` adds domain checks and lookup indexes.
 - `V3__add_business_audit_trail.sql` adds append-only business audit events.
+- `V4__allow_internal_user_created_audit_action.sql` extends the audit-action constraint for Admin-created internal accounts.
 
 Never edit a migration after it has been committed or applied. Add a new migration,
 for example `V4__add_payroll_approvals.sql`, for every later schema change.
