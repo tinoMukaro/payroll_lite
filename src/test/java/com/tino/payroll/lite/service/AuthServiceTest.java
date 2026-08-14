@@ -26,11 +26,12 @@ class AuthServiceTest {
     @Mock private EmployeeRepo employeeRepo;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtService jwtService;
+    @Mock private AuditService auditService;
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, employeeRepo, passwordEncoder, jwtService);
+        authService = new AuthService(userRepository, employeeRepo, passwordEncoder, jwtService, auditService);
     }
 
     @Test

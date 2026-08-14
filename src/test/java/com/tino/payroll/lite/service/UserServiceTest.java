@@ -29,12 +29,14 @@ class UserServiceTest {
     private UserRepository userRepository;
     @Mock
     private EmployeeRepo employeeRepo;
+    @Mock
+    private AuditService auditService;
 
     private UserService service;
 
     @BeforeEach
     void setUp() {
-        service = new UserService(userRepository, employeeRepo);
+        service = new UserService(userRepository, employeeRepo, auditService);
     }
 
     @Test

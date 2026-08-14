@@ -40,13 +40,15 @@ class PayrollAdjustmentServiceTest {
     private PayrollRunRepository payrollRunRepository;
     @Mock
     private EmployeeRepo employeeRepo;
+    @Mock
+    private AuditService auditService;
 
     private PayrollAdjustmentService service;
 
     @BeforeEach
     void setUp() {
         service = new PayrollAdjustmentService(
-                adjustmentRepository, payrollRunRepository, employeeRepo
+                adjustmentRepository, payrollRunRepository, employeeRepo, auditService
         );
     }
 

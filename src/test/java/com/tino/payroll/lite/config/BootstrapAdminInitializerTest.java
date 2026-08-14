@@ -3,6 +3,7 @@ package com.tino.payroll.lite.config;
 import com.tino.payroll.lite.entity.User;
 import com.tino.payroll.lite.enums.Role;
 import com.tino.payroll.lite.repository.UserRepository;
+import com.tino.payroll.lite.service.AuditService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +29,8 @@ class BootstrapAdminInitializerTest {
     private UserRepository userRepository;
     @Mock
     private PasswordEncoder passwordEncoder;
+    @Mock
+    private AuditService auditService;
 
     private BootstrapAdminInitializer initializer;
 
@@ -86,6 +89,7 @@ class BootstrapAdminInitializerTest {
         return new BootstrapAdminInitializer(
                 userRepository,
                 passwordEncoder,
+                auditService,
                 enabled,
                 email,
                 password,

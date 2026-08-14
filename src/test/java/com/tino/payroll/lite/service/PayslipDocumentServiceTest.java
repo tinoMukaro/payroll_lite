@@ -29,12 +29,14 @@ class PayslipDocumentServiceTest {
     private PayslipRepository payslipRepository;
     @Mock
     private PayslipPdfService payslipPdfService;
+    @Mock
+    private AuditService auditService;
 
     private PayslipDocumentService service;
 
     @BeforeEach
     void setUp() {
-        service = new PayslipDocumentService(payslipRepository, payslipPdfService);
+        service = new PayslipDocumentService(payslipRepository, payslipPdfService, auditService);
     }
 
     @Test

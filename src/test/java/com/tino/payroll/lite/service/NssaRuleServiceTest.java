@@ -29,12 +29,14 @@ class NssaRuleServiceTest {
 
     @Mock
     private NssaRuleRepository repository;
+    @Mock
+    private AuditService auditService;
 
     private NssaRuleService service;
 
     @BeforeEach
     void setUp() {
-        service = new NssaRuleService(repository);
+        service = new NssaRuleService(repository, auditService);
     }
 
     @Test

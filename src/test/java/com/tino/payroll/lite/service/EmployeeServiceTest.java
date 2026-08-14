@@ -26,11 +26,12 @@ class EmployeeServiceTest {
 
     @Mock private EmployeeRepo employeeRepo;
     @Mock private UserRepository userRepository;
+    @Mock private AuditService auditService;
     private EmployeeService employeeService;
 
     @BeforeEach
     void setUp() {
-        employeeService = new EmployeeService(employeeRepo, userRepository);
+        employeeService = new EmployeeService(employeeRepo, userRepository, auditService);
     }
 
     @Test

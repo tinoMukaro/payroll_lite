@@ -34,12 +34,14 @@ class PayeTaxTableServiceTest {
 
     @Mock
     private PayeTaxTableRepository repository;
+    @Mock
+    private AuditService auditService;
 
     private PayeTaxTableService service;
 
     @BeforeEach
     void setUp() {
-        service = new PayeTaxTableService(repository, new PayeCalculator());
+        service = new PayeTaxTableService(repository, new PayeCalculator(), auditService);
     }
 
     @Test

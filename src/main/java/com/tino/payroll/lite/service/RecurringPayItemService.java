@@ -4,6 +4,8 @@ import com.tino.payroll.lite.dto.RecurringPayItemRequest;
 import com.tino.payroll.lite.dto.RecurringPayItemResponse;
 import com.tino.payroll.lite.entity.Employee;
 import com.tino.payroll.lite.entity.RecurringPayItem;
+import com.tino.payroll.lite.enums.AuditAction;
+import com.tino.payroll.lite.enums.AuditEntityType;
 import com.tino.payroll.lite.enums.PayrollAdjustmentType;
 import com.tino.payroll.lite.exception.EmployeeNotFoundException;
 import com.tino.payroll.lite.exception.RecurringPayItemNotFoundException;
@@ -21,6 +23,7 @@ public class RecurringPayItemService {
 
     private final RecurringPayItemRepository payItemRepository;
     private final EmployeeRepo employeeRepo;
+    private final AuditService auditService;
 
     @Transactional(readOnly = true)
     public List<RecurringPayItemResponse> list(Long employeeId) {
@@ -39,7 +42,16 @@ public class RecurringPayItemService {
         RecurringPayItem item = new RecurringPayItem();
         item.setEmployee(employee);
         applyRequest(item, request);
-        return mapResponse(payItemRepository.save(item));
+        RecurringPayItem savedItem = payItemRepository.save(item);
+        auditService.record(
+                AuditAction.RECURRING_PAY_ITEM_CREATED,
+                AuditEntityType.RECURRING_PAY_ITEM,
+                savedItem.getId(),
+                "Created recurring item '%s' for %s".formatted(
+                        savedItem.getDescription(), employee.getEmployeeNumber()
+                )
+        );
+        return mapResponse(savedItem);
     }
 
     @Transactional
@@ -55,7 +67,16 @@ public class RecurringPayItemService {
                         "Recurring pay item not found with ID: " + payItemId
                 ));
         applyRequest(item, request);
-        return mapResponse(payItemRepository.save(item));
+        RecurringPayItem savedItem = payItemRepository.save(item);
+        auditService.record(
+                AuditAction.RECURRING_PAY_ITEM_UPDATED,
+                AuditEntityType.RECURRING_PAY_ITEM,
+                savedItem.getId(),
+                "Updated recurring item '%s' for %s".formatted(
+                        savedItem.getDescription(), savedItem.getEmployee().getEmployeeNumber()
+                )
+        );
+        return mapResponse(savedItem);
     }
 
     private void validate(RecurringPayItemRequest request) {

@@ -6,6 +6,8 @@ import com.tino.payroll.lite.dto.RegisterUserRequest;
 import com.tino.payroll.lite.dto.UserResponse;
 import com.tino.payroll.lite.entity.Employee;
 import com.tino.payroll.lite.entity.User;
+import com.tino.payroll.lite.enums.AuditAction;
+import com.tino.payroll.lite.enums.AuditEntityType;
 import com.tino.payroll.lite.enums.EmployeeStatus;
 import com.tino.payroll.lite.enums.Role;
 import com.tino.payroll.lite.repository.EmployeeRepo;
@@ -26,6 +28,7 @@ public class AuthService {
     private final EmployeeRepo employeeRepo;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AuditService auditService;
 
     @Transactional
     public UserResponse register(RegisterUserRequest request) {
@@ -59,6 +62,13 @@ public class AuthService {
             employeeRepo.save(matchingEmployee);
         }
 
+        auditService.recordFor(
+                savedUser,
+                AuditAction.USER_REGISTERED,
+                AuditEntityType.USER,
+                savedUser.getId(),
+                "Registered user account" + (matchingEmployee == null ? "" : " and linked employee record")
+        );
         return mapToResponse(savedUser);
     }
 

@@ -1,8 +1,11 @@
 package com.tino.payroll.lite.config;
 
 import com.tino.payroll.lite.entity.User;
+import com.tino.payroll.lite.enums.AuditAction;
+import com.tino.payroll.lite.enums.AuditEntityType;
 import com.tino.payroll.lite.enums.Role;
 import com.tino.payroll.lite.repository.UserRepository;
+import com.tino.payroll.lite.service.AuditService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,6 +13,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
 
@@ -20,6 +24,7 @@ public class BootstrapAdminInitializer implements ApplicationRunner {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
     private final boolean enabled;
     private final String email;
     private final String password;
@@ -29,6 +34,7 @@ public class BootstrapAdminInitializer implements ApplicationRunner {
     public BootstrapAdminInitializer(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
+            AuditService auditService,
             @Value("${app.bootstrap-admin.enabled:false}") boolean enabled,
             @Value("${app.bootstrap-admin.email:}") String email,
             @Value("${app.bootstrap-admin.password:}") String password,
@@ -37,6 +43,7 @@ public class BootstrapAdminInitializer implements ApplicationRunner {
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditService = auditService;
         this.enabled = enabled;
         this.email = email;
         this.password = password;
@@ -45,6 +52,7 @@ public class BootstrapAdminInitializer implements ApplicationRunner {
     }
 
     @Override
+    @Transactional
     public void run(ApplicationArguments args) {
         if (!enabled || userRepository.existsByRole(Role.ADMIN)) {
             return;
@@ -57,6 +65,12 @@ public class BootstrapAdminInitializer implements ApplicationRunner {
                 .orElseGet(() -> createAdministrator(normalizedEmail));
 
         userRepository.save(admin);
+        auditService.recordSystem(
+                AuditAction.ADMIN_BOOTSTRAPPED,
+                AuditEntityType.USER,
+                admin.getId(),
+                "Bootstrapped initial administrator " + normalizedEmail
+        );
         log.info("Initial administrator is ready: {}", normalizedEmail);
     }
 

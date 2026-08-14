@@ -3,6 +3,8 @@ package com.tino.payroll.lite.service;
 import com.tino.payroll.lite.dto.NssaRuleRequest;
 import com.tino.payroll.lite.dto.NssaRuleResponse;
 import com.tino.payroll.lite.entity.NssaRule;
+import com.tino.payroll.lite.enums.AuditAction;
+import com.tino.payroll.lite.enums.AuditEntityType;
 import com.tino.payroll.lite.exception.NssaRuleNotFoundException;
 import com.tino.payroll.lite.exception.PayrollConfigurationException;
 import com.tino.payroll.lite.repository.NssaRuleRepository;
@@ -18,6 +20,7 @@ import java.util.List;
 public class NssaRuleService {
 
     private final NssaRuleRepository repository;
+    private final AuditService auditService;
 
     @Transactional(readOnly = true)
     public List<NssaRuleResponse> getAll() {
@@ -31,7 +34,14 @@ public class NssaRuleService {
         validate(request, null);
         NssaRule rule = new NssaRule();
         apply(rule, request);
-        return toResponse(repository.save(rule));
+        NssaRule savedRule = repository.save(rule);
+        auditService.record(
+                AuditAction.NSSA_RULE_CREATED,
+                AuditEntityType.NSSA_RULE,
+                savedRule.getId(),
+                "Created NSSA rule " + savedRule.getVersion()
+        );
+        return toResponse(savedRule);
     }
 
     @Transactional
@@ -39,7 +49,14 @@ public class NssaRuleService {
         NssaRule rule = find(id);
         validate(request, id);
         apply(rule, request);
-        return toResponse(repository.save(rule));
+        NssaRule savedRule = repository.save(rule);
+        auditService.record(
+                AuditAction.NSSA_RULE_UPDATED,
+                AuditEntityType.NSSA_RULE,
+                savedRule.getId(),
+                "Updated NSSA rule " + savedRule.getVersion()
+        );
+        return toResponse(savedRule);
     }
 
     private void validate(NssaRuleRequest request, Long excludedId) {

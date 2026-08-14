@@ -5,6 +5,8 @@ import com.tino.payroll.lite.dto.PayrollAdjustmentResponse;
 import com.tino.payroll.lite.entity.Employee;
 import com.tino.payroll.lite.entity.PayrollAdjustment;
 import com.tino.payroll.lite.entity.PayrollRun;
+import com.tino.payroll.lite.enums.AuditAction;
+import com.tino.payroll.lite.enums.AuditEntityType;
 import com.tino.payroll.lite.enums.EmployeeStatus;
 import com.tino.payroll.lite.enums.PayrollAdjustmentType;
 import com.tino.payroll.lite.enums.PayrollStatus;
@@ -28,6 +30,7 @@ public class PayrollAdjustmentService {
     private final PayrollAdjustmentRepository adjustmentRepository;
     private final PayrollRunRepository payrollRunRepository;
     private final EmployeeRepo employeeRepo;
+    private final AuditService auditService;
 
     @Transactional(readOnly = true)
     public List<PayrollAdjustmentResponse> list(Long payrollRunId) {
@@ -58,7 +61,16 @@ public class PayrollAdjustmentService {
         adjustment.setDescription(request.getDescription().trim());
         adjustment.setAmount(request.getAmount());
         adjustment.setTaxable(request.getType() == PayrollAdjustmentType.EARNING && request.isTaxable());
-        return mapResponse(adjustmentRepository.save(adjustment));
+        PayrollAdjustment savedAdjustment = adjustmentRepository.save(adjustment);
+        auditService.record(
+                AuditAction.PAYROLL_ADJUSTMENT_CREATED,
+                AuditEntityType.PAYROLL_ADJUSTMENT,
+                savedAdjustment.getId(),
+                "Created one-off item '%s' for %s".formatted(
+                        savedAdjustment.getDescription(), employee.getEmployeeNumber()
+                )
+        );
+        return mapResponse(savedAdjustment);
     }
 
     @Transactional
@@ -71,6 +83,14 @@ public class PayrollAdjustmentService {
                         "Payroll adjustment not found with ID: " + adjustmentId
                 ));
         adjustmentRepository.delete(adjustment);
+        auditService.record(
+                AuditAction.PAYROLL_ADJUSTMENT_DELETED,
+                AuditEntityType.PAYROLL_ADJUSTMENT,
+                adjustment.getId(),
+                "Deleted one-off item '%s' from payroll run %d".formatted(
+                        adjustment.getDescription(), payrollRunId
+                )
+        );
     }
 
     private PayrollRun findPayrollRun(Long id) {

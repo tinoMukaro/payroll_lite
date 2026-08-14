@@ -3,6 +3,8 @@ package com.tino.payroll.lite.service;
 import com.tino.payroll.lite.dto.UpdateUserRoleRequest;
 import com.tino.payroll.lite.dto.UserResponse;
 import com.tino.payroll.lite.entity.User;
+import com.tino.payroll.lite.enums.AuditAction;
+import com.tino.payroll.lite.enums.AuditEntityType;
 import com.tino.payroll.lite.enums.Role;
 import com.tino.payroll.lite.exception.LastAdministratorException;
 import com.tino.payroll.lite.exception.UserNotFoundException;
@@ -20,6 +22,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final EmployeeRepo employeeRepo;
+    private final AuditService auditService;
 
 
     // -----------------------------------------------------
@@ -51,10 +54,18 @@ public class UserService {
             );
         }
 
+        Role previousRole = user.getRole();
         user.setRole(request.getRole());
 
         User updatedUser = userRepository.save(user);
-
+        auditService.record(
+                AuditAction.USER_ROLE_CHANGED,
+                AuditEntityType.USER,
+                updatedUser.getId(),
+                "Changed role for %s from %s to %s".formatted(
+                        updatedUser.getEmail(), previousRole, updatedUser.getRole()
+                )
+        );
         return mapToResponse(updatedUser);
     }
 

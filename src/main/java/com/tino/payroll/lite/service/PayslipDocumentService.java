@@ -3,6 +3,8 @@ package com.tino.payroll.lite.service;
 import com.tino.payroll.lite.dto.PayslipDocument;
 import com.tino.payroll.lite.entity.Payslip;
 import com.tino.payroll.lite.entity.User;
+import com.tino.payroll.lite.enums.AuditAction;
+import com.tino.payroll.lite.enums.AuditEntityType;
 import com.tino.payroll.lite.enums.Role;
 import com.tino.payroll.lite.exception.PayslipNotFoundException;
 import com.tino.payroll.lite.repository.PayslipRepository;
@@ -17,15 +19,25 @@ public class PayslipDocumentService {
 
     private final PayslipRepository payslipRepository;
     private final PayslipPdfService payslipPdfService;
+    private final AuditService auditService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public PayslipDocument generate(Long payslipId, User requester) {
         Payslip payslip = payslipRepository.findForDownload(payslipId)
                 .orElseThrow(() -> new PayslipNotFoundException(
                         "Payslip not found with ID: " + payslipId
                 ));
         authorize(payslip, requester);
-        return new PayslipDocument(filename(payslip), payslipPdfService.generate(payslip));
+        String filename = filename(payslip);
+        PayslipDocument document = new PayslipDocument(filename, payslipPdfService.generate(payslip));
+        auditService.recordFor(
+                requester,
+                AuditAction.PAYSLIP_DOWNLOADED,
+                AuditEntityType.PAYSLIP,
+                payslip.getId(),
+                "Downloaded " + filename
+        );
+        return document;
     }
 
     private void authorize(Payslip payslip, User requester) {

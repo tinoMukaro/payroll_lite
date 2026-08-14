@@ -6,6 +6,8 @@ import com.tino.payroll.lite.dto.PayeTaxTableRequest;
 import com.tino.payroll.lite.dto.PayeTaxTableResponse;
 import com.tino.payroll.lite.entity.PayeTaxBand;
 import com.tino.payroll.lite.entity.PayeTaxTable;
+import com.tino.payroll.lite.enums.AuditAction;
+import com.tino.payroll.lite.enums.AuditEntityType;
 import com.tino.payroll.lite.exception.PayeTaxTableNotFoundException;
 import com.tino.payroll.lite.exception.PayrollConfigurationException;
 import com.tino.payroll.lite.repository.PayeTaxTableRepository;
@@ -27,6 +29,7 @@ public class PayeTaxTableService {
 
     private final PayeTaxTableRepository repository;
     private final PayeCalculator calculator;
+    private final AuditService auditService;
 
     @Transactional(readOnly = true)
     public List<PayeTaxTableResponse> getAll() {
@@ -40,7 +43,14 @@ public class PayeTaxTableService {
         validate(request, null);
         PayeTaxTable table = new PayeTaxTable();
         apply(table, request);
-        return toResponse(repository.save(table));
+        PayeTaxTable savedTable = repository.save(table);
+        auditService.record(
+                AuditAction.PAYE_TABLE_CREATED,
+                AuditEntityType.PAYE_TABLE,
+                savedTable.getId(),
+                "Created PAYE table " + savedTable.getVersion()
+        );
+        return toResponse(savedTable);
     }
 
     @Transactional
@@ -48,7 +58,14 @@ public class PayeTaxTableService {
         PayeTaxTable table = find(id);
         validate(request, id);
         apply(table, request);
-        return toResponse(repository.save(table));
+        PayeTaxTable savedTable = repository.save(table);
+        auditService.record(
+                AuditAction.PAYE_TABLE_UPDATED,
+                AuditEntityType.PAYE_TABLE,
+                savedTable.getId(),
+                "Updated PAYE table " + savedTable.getVersion()
+        );
+        return toResponse(savedTable);
     }
 
     private void validate(PayeTaxTableRequest request, Long excludedId) {

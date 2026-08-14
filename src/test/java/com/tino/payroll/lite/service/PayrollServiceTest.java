@@ -59,6 +59,8 @@ class PayrollServiceTest {
     private NssaRuleResolver nssaRuleResolver;
     @Mock
     private PayeTaxTableResolver payeTaxTableResolver;
+    @Mock
+    private AuditService auditService;
 
     private NssaCalculator nssaCalculator;
     private PayeCalculator payeCalculator;
@@ -73,7 +75,7 @@ class PayrollServiceTest {
                 payrollRunRepository, payslipRepository, employeeRepo, adjustmentRepository,
                 recurringPayItemRepository,
                 nssaRuleResolver, nssaCalculator,
-                payeTaxTableResolver, payeCalculator
+                payeTaxTableResolver, payeCalculator, auditService
         );
     }
 

@@ -10,6 +10,8 @@ import com.tino.payroll.lite.entity.PayrollRun;
 import com.tino.payroll.lite.entity.Payslip;
 import com.tino.payroll.lite.entity.PayslipLineItem;
 import com.tino.payroll.lite.entity.RecurringPayItem;
+import com.tino.payroll.lite.enums.AuditAction;
+import com.tino.payroll.lite.enums.AuditEntityType;
 import com.tino.payroll.lite.enums.EmployeeStatus;
 import com.tino.payroll.lite.enums.PayItemSource;
 import com.tino.payroll.lite.enums.PayrollAdjustmentType;
@@ -59,6 +61,7 @@ public class PayrollService {
     private final NssaCalculator nssaCalculator;
     private final PayeTaxTableResolver payeTaxTableResolver;
     private final PayeCalculator payeCalculator;
+    private final AuditService auditService;
 
     @Transactional
     public PayrollRunResponse createPayrollRun(CreatePayrollRunRequest request) {
@@ -74,7 +77,16 @@ public class PayrollService {
         payrollRun.setCurrency(request.getCurrency());
         payrollRun.setStatus(PayrollStatus.DRAFT);
 
-        return mapPayrollRun(payrollRunRepository.save(payrollRun));
+        PayrollRun savedRun = payrollRunRepository.save(payrollRun);
+        auditService.record(
+                AuditAction.PAYROLL_RUN_CREATED,
+                AuditEntityType.PAYROLL_RUN,
+                savedRun.getId(),
+                "Created %04d-%02d %s payroll run".formatted(
+                        savedRun.getYear(), savedRun.getMonth(), savedRun.getCurrency()
+                )
+        );
+        return mapPayrollRun(savedRun);
     }
 
     @Transactional(readOnly = true)
@@ -100,7 +112,16 @@ public class PayrollService {
         payrollRun.setStatus(PayrollStatus.PROCESSED);
         payrollRun.setProcessedAt(LocalDateTime.now());
 
-        return mapPayrollRun(payrollRunRepository.save(payrollRun));
+        PayrollRun savedRun = payrollRunRepository.save(payrollRun);
+        auditService.record(
+                AuditAction.PAYROLL_RUN_PROCESSED,
+                AuditEntityType.PAYROLL_RUN,
+                savedRun.getId(),
+                "Processed %04d-%02d %s payroll for %d employees".formatted(
+                        savedRun.getYear(), savedRun.getMonth(), savedRun.getCurrency(), payslips.size()
+                )
+        );
+        return mapPayrollRun(savedRun);
     }
 
     @Transactional(readOnly = true)

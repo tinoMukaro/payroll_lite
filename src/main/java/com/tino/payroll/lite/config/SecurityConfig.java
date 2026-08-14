@@ -48,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/nssa-rules/**").hasAnyRole("ADMIN", "HR")
                         .requestMatchers("/api/paye-tax-tables/**").hasAnyRole("ADMIN", "HR")
                         .requestMatchers("/api/users/**").hasRole("ADMIN")
+                        .requestMatchers("/api/audit-events/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(

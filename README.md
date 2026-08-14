@@ -52,6 +52,7 @@ The current API provides:
 - Immutable salary and statutory snapshots on generated payslips.
 - Employee access to only their own payslips.
 - On-demand PDF payslip downloads for Admin/HR and the owning employee.
+- Append-only business audit history for security-sensitive and payroll operations.
 - OpenAPI documentation through Swagger UI.
 
 ## V1 release scope
@@ -501,6 +502,16 @@ PAYE bands use decimal rates, begin at zero, must be contiguous, and require one
 | `GET`   | `/api/users`           | Admin  | `200 OK` |
 | `PATCH` | `/api/users/{id}/role` | Admin  | `200 OK` |
 
+### Audit events
+
+| Method | Endpoint            | Access | Success  |
+| ------ | ------------------- | ------ | -------- |
+| `GET`  | `/api/audit-events` | Admin  | `200 OK` |
+
+Audit queries support `action`, `entityType`, `actorEmail`, `from`, `to`, `page`, and
+`size` parameters. `from` and `to` use ISO-8601 date-time values, and page sizes are
+limited to 100 records.
+
 ### Supported enum values
 
 | Type            | Values                                          |
@@ -509,6 +520,14 @@ PAYE bands use decimal rates, begin at zero, must be contiguous, and require one
 | Currency        | `USD`, `ZWG`                                    |
 | Employee status | `ACTIVE`, `ON_LEAVE`, `SUSPENDED`, `TERMINATED` |
 | Payroll status  | `DRAFT`, `PROCESSED`, `CANCELLED`               |
+| Audit entity    | `USER`, `EMPLOYEE`, `NSSA_RULE`, `PAYE_TABLE`, `RECURRING_PAY_ITEM`, `PAYROLL_RUN`, `PAYROLL_ADJUSTMENT`, `PAYSLIP` |
+
+Audit action values are `ADMIN_BOOTSTRAPPED`, `USER_REGISTERED`,
+`USER_ROLE_CHANGED`, `EMPLOYEE_CREATED`, `EMPLOYEE_UPDATED`, `EMPLOYEE_DELETED`,
+`NSSA_RULE_CREATED`, `NSSA_RULE_UPDATED`, `PAYE_TABLE_CREATED`, `PAYE_TABLE_UPDATED`,
+`RECURRING_PAY_ITEM_CREATED`, `RECURRING_PAY_ITEM_UPDATED`, `PAYROLL_RUN_CREATED`,
+`PAYROLL_RUN_PROCESSED`, `PAYROLL_ADJUSTMENT_CREATED`,
+`PAYROLL_ADJUSTMENT_DELETED`, and `PAYSLIP_DOWNLOADED`.
 
 ## Common request examples
 
@@ -690,9 +709,22 @@ Migration files live in `src/main/resources/db/migration`:
 
 - `V1__initial_schema.sql` creates a complete database from scratch.
 - `V2__harden_constraints_and_indexes.sql` adds domain checks and lookup indexes.
+- `V3__add_business_audit_trail.sql` adds append-only business audit events.
 
 Never edit a migration after it has been committed or applied. Add a new migration,
-for example `V3__add_audit_events.sql`, for every later schema change.
+for example `V4__add_payroll_approvals.sql`, for every later schema change.
+
+### Business audit trail
+
+Migration V3 creates `audit_events`. Each event contains an actor snapshot, action,
+business entity type and ID, a safe description, and an immutable timestamp. Events
+are written in the same transaction as the corresponding business operation, so a
+failed operation cannot leave a misleading success event.
+
+The application exposes read-only, paginated access to Admin users. PostgreSQL also
+rejects `UPDATE` and `DELETE` operations on `audit_events`, making the history
+append-only even if another database client bypasses the API. The audit trail never
+stores passwords, JWTs, or complete payslip and salary payloads.
 
 ### Fresh database
 
@@ -827,6 +859,7 @@ The API uses dedicated response DTOs rather than returning JPA entities directly
 | `PayrollRunResponse` | `id`, `month`, `year`, `currency`, `status`, `createdAt`, `processedAt`                                                               |
 | `NssaRuleResponse`   | `id`, `version`, `currency`, effective dates, both rates, ceiling, `active`                                                           |
 | `PayslipResponse`    | Employee/run identity, period, currency, salary snapshots, NSSA/PAYE breakdown, adjustment lines, deductions, net salary, `createdAt` |
+| `AuditEventResponse` | Actor snapshot, `action`, `entityType`, `entityId`, safe `details`, and `occurredAt`                                                  |
 
 A payslip response includes:
 
@@ -858,7 +891,7 @@ available and is skipped with an explicit reason when Docker is unavailable.
 - There is no pagination, filtering, or sorting contract on list endpoints.
 - There are no refresh-token, logout, or token-revocation endpoints.
 - Swagger documents routes, but controllers do not yet include detailed per-operation schemas and examples.
-- The project has no container setup, production profile, audit log, or observability stack yet.
+- The project has no container setup, production profile, or observability stack yet.
 
 ## Production checklist
 
@@ -870,7 +903,6 @@ Before treating this project as a production payroll system:
 - Configure CORS for the deployed frontend origin.
 - Add HTTPS and secure reverse-proxy settings.
 - Add refresh/revocation or shorter-lived access-token handling.
-- Add audit records for role, employee, statutory-rule, and payroll changes.
 - Make statutory rules immutable after they have been used, or add rule revisioning.
 - Define payroll approval, reversal, and correction procedures.
 - Validate all statutory rules against current official publications.
@@ -885,7 +917,7 @@ Suggested delivery order:
 1. Employee-specific exemptions, pensions, and tax credits.
 2. Optional multi-user payroll approval workflow.
 3. Employer-cost and statutory summary reporting.
-4. Versioned database migrations and audit history.
+4. Versioned database migrations and audit history. **Completed.**
 5. Pagination, filtering, and richer OpenAPI documentation.
 
 ## License

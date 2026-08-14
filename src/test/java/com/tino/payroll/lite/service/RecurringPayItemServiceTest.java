@@ -35,12 +35,14 @@ class RecurringPayItemServiceTest {
     private RecurringPayItemRepository payItemRepository;
     @Mock
     private EmployeeRepo employeeRepo;
+    @Mock
+    private AuditService auditService;
 
     private RecurringPayItemService service;
 
     @BeforeEach
     void setUp() {
-        service = new RecurringPayItemService(payItemRepository, employeeRepo);
+        service = new RecurringPayItemService(payItemRepository, employeeRepo, auditService);
     }
 
     @Test

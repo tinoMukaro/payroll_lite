@@ -5,6 +5,8 @@ import com.tino.payroll.lite.dto.EmployeeResponse;
 import com.tino.payroll.lite.dto.UpdateEmployeeRequest;
 import com.tino.payroll.lite.entity.Employee;
 import com.tino.payroll.lite.entity.User;
+import com.tino.payroll.lite.enums.AuditAction;
+import com.tino.payroll.lite.enums.AuditEntityType;
 import com.tino.payroll.lite.enums.EmployeeStatus;
 import com.tino.payroll.lite.exception.EmployeeNotFoundException;
 import com.tino.payroll.lite.repository.EmployeeRepo;
@@ -23,6 +25,7 @@ public class EmployeeService {
 
     private final EmployeeRepo employeeRepo;
     private final UserRepository userRepository;
+    private final AuditService auditService;
 
     @Transactional
     public EmployeeResponse createEmployee(CreateEmployeeRequest request) {
@@ -51,6 +54,12 @@ public class EmployeeService {
 
         Employee savedEmployee = employeeRepo.saveAndFlush(employee);
         savedEmployee.setEmployeeNumber("EMP-%06d".formatted(savedEmployee.getId()));
+        auditService.record(
+                AuditAction.EMPLOYEE_CREATED,
+                AuditEntityType.EMPLOYEE,
+                savedEmployee.getId(),
+                "Created employee " + savedEmployee.getEmployeeNumber()
+        );
         return mapToResponse(savedEmployee);
     }
 
@@ -67,6 +76,7 @@ public class EmployeeService {
     @Transactional
     public EmployeeResponse updateEmployee(Long id, UpdateEmployeeRequest request) {
         Employee employee = findEmployee(id);
+        EmployeeStatus previousStatus = employee.getStatus();
         String email = normalizeEmail(request.getEmail());
 
         if (employeeRepo.existsByEmailIgnoreCaseAndIdNot(email, id)) {
@@ -95,12 +105,28 @@ public class EmployeeService {
             userRepository.save(linkedUser);
         }
 
-        return mapToResponse(employeeRepo.save(employee));
+        Employee savedEmployee = employeeRepo.save(employee);
+        auditService.record(
+                AuditAction.EMPLOYEE_UPDATED,
+                AuditEntityType.EMPLOYEE,
+                savedEmployee.getId(),
+                "Updated employee %s (status %s -> %s)".formatted(
+                        savedEmployee.getEmployeeNumber(), previousStatus, savedEmployee.getStatus()
+                )
+        );
+        return mapToResponse(savedEmployee);
     }
 
     @Transactional
     public void deleteEmployee(Long id) {
-        employeeRepo.delete(findEmployee(id));
+        Employee employee = findEmployee(id);
+        employeeRepo.delete(employee);
+        auditService.record(
+                AuditAction.EMPLOYEE_DELETED,
+                AuditEntityType.EMPLOYEE,
+                employee.getId(),
+                "Deleted employee " + employee.getEmployeeNumber()
+        );
     }
 
     private Employee findEmployee(Long id) {
