@@ -17,6 +17,7 @@ This repository is an active learning project, but its structure and documentati
 - [Domain and business rules](#domain-and-business-rules)
 - [Prerequisites](#prerequisites)
 - [Quick start](#quick-start)
+- [Run the complete stack with Docker](#run-the-complete-stack-with-docker)
 - [Configuration](#configuration)
 - [Bootstrap the first administrator](#bootstrap-the-first-administrator)
 - [Authentication and authorization](#authentication-and-authorization)
@@ -250,6 +251,10 @@ Install or provide:
 - PostgreSQL. The current development database has been tested with PostgreSQL 17.
 - Git.
 
+Alternatively, Docker Desktop or Docker Engine with the Compose plugin can run the
+complete database, API, and web application without locally installing Java,
+PostgreSQL, Node.js, or Nginx.
+
 A separate Maven installation is optional because the repository includes Maven Wrapper scripts. The first wrapper invocation may require Internet access to download Maven.
 
 Verify Java:
@@ -327,6 +332,63 @@ The API starts at:
 ./mvnw clean package
 java -jar target/payroll.lite-1.0.0.jar
 ```
+
+## Run the complete stack with Docker
+
+The Compose file expects the API and webapp repositories to be sibling directories:
+
+```text
+payroll_lite/
+|-- payroll-lite-api/
+`-- payroll-lite-webapp/
+```
+
+From `payroll-lite-api`, create the ignored Docker environment file:
+
+PowerShell:
+
+```powershell
+Copy-Item .env.docker.example .env.docker
+```
+
+Bash:
+
+```bash
+cp .env.docker.example .env.docker
+```
+
+Replace the example database password, JWT secret, and bootstrap Admin password.
+Then build and start the complete stack:
+
+```bash
+docker compose --env-file .env.docker up --build -d
+```
+
+Open:
+
+- Web application: `http://localhost:8080`
+- API and Swagger UI: `http://localhost:9090/swagger-ui/index.html`
+- API health: `http://localhost:9090/actuator/health`
+
+The browser sends `/api` requests to Nginx, which proxies them to the API over the
+private Compose network. PostgreSQL is not published to the host. Flyway creates or
+upgrades the schema automatically, and the named `payroll_data` volume preserves the
+database across container replacements.
+
+Useful operational commands:
+
+```bash
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f api
+docker compose --env-file .env.docker down
+```
+
+`docker compose down` preserves payroll data. To deliberately delete the database
+volume and start again from an empty database, use `docker compose down -v`. Do not
+use `-v` when the data must be retained.
+
+The API and web ports bind to `127.0.0.1` by default. Change `API_BIND_ADDRESS` or
+`WEB_BIND_ADDRESS` only when you intentionally want other machines to reach them.
 
 ## Configuration
 
@@ -891,7 +953,8 @@ available and is skipped with an explicit reason when Docker is unavailable.
 - There is no pagination, filtering, or sorting contract on list endpoints.
 - There are no refresh-token, logout, or token-revocation endpoints.
 - Swagger documents routes, but controllers do not yet include detailed per-operation schemas and examples.
-- The project has no container setup, production profile, or observability stack yet.
+- The project has a local container stack and health checks, but no production
+  orchestrator, centralized logs, metrics, tracing, or alerting stack yet.
 
 ## Production checklist
 

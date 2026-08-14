@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.agents
+.env
+.env.*
+!.env.example
+target
+tmp
+*.iml
+*.log
+HELP.md

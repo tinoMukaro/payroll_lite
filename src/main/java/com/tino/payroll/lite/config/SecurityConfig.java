@@ -42,6 +42,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/me").authenticated()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/api/payslips/me").authenticated()
                         .requestMatchers("/api/employees/**").hasAnyRole("ADMIN", "HR")
                         .requestMatchers("/api/payroll-runs/**").hasAnyRole("ADMIN", "HR")
@@ -70,6 +71,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:5173",
+                "http://localhost:8080",
                 "http://127.0.0.1:5173"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
